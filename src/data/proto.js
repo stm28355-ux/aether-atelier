@@ -2,12 +2,12 @@
 // 時間の単位は「刻み」（1秒＝10刻み）。ベルトは1マスを5刻みで進む（毎分120個まで）。
 
 export const items = {
-  wood: { name: '木材' },
-  ore: { name: '鉱石' },
-  plank: { name: '板' },
-  molten: { name: '溶けた鉱石' },
-  plate: { name: '金属板' },
-  dust: { name: '鉱石粉' },
+  wood: { name: '木材', color: '#a9713f' },
+  ore: { name: '鉱石', color: '#6f86a8' },
+  plank: { name: '板', color: '#e3bf86' },
+  molten: { name: '溶けた鉱石', color: '#ff7a1a' },
+  plate: { name: '金属板', color: '#cfd6dd' },
+  dust: { name: '鉱石粉', color: '#8a7a5c' },
 };
 
 export const buildings = {

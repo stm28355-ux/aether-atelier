@@ -4,7 +4,17 @@
 
 **遊ぶ：** https://stm28355-ux.github.io/aether-atelier/
 
-今は作り始めたところです。進み具合は [Milestones](https://github.com/stm28355-ux/aether-atelier/milestones)、計画は [docs/plan.md](docs/plan.md) を見てください。
+今は試作です。区0（木材を板にする）と区1（竜炉の熱で鉱石を溶かす）が遊べます。進み具合は [Milestones](https://github.com/stm28355-ux/aether-atelier/milestones)、計画は [docs/plan.md](docs/plan.md) を見てください。
+
+## 遊び方
+
+1. 左の「置く物」から選んで、盤面をクリックして置く。ベルトはドラッグで引く
+2. 倉庫の「出す」口から出てくる素材を、機械に通して「納める」口へ運ぶ
+3. 右の依頼の量（毎分○個）を流し続けると達成。新しい機械や次の区画が開く
+4. 機械は正面（矢印の辺）から出し、残りの3辺から受け取る
+5. 竜炉の周りの赤い範囲を3マス進んだ鉱石は、ベルトの上で溶ける
+
+キー：R かホイールで回す、右クリックで壊す、Q で手放す、Space で一時停止、1〜9 で置く物を選ぶ。
 
 ## 開発
 
