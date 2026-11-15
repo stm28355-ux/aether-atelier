@@ -11,6 +11,7 @@
 ```bash
 npm run serve    # http://localhost:5191/
 npm test         # テスト
+npm run calc -- plate=30 dust=30   # 目標の毎分の量から、機械の台数と原料を出す
 ```
 
 静的HTML＋JavaScript（ESモジュール）で、ビルドはありません。
