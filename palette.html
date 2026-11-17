@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>色の試し描き</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  .page { max-width: 1000px; margin: 0 auto; padding: 16px; }
+  .page h2 { font-size: 17px; margin: 28px 0 6px; color: var(--ink); }
+  .page p.note { margin: 0 0 12px; color: var(--sub); }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 10px; }
+  .tile { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 8px; text-align: center; font-size: 12px; }
+  .tile canvas { display: block; margin: 0 auto 4px; image-rendering: pixelated; }
+  .tile b { display: block; font-size: 13px; }
+  .tile span { color: var(--sub); }
+  .chain { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 6px 0; }
+  .chain .arrow { color: var(--sub); font-size: 12px; }
+  .chain .tile { width: 118px; }
+  .row { display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start; }
+  figure { margin: 0; text-align: center; }
+  figcaption { font-size: 12px; color: var(--sub); margin-top: 4px; }
+  .gray { filter: grayscale(1); }
+  .protan { filter: url(#protan); }
+  .deutan { filter: url(#deutan); }
+  #machines { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
+  .board canvas { border: 1px solid var(--line); border-radius: 8px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Aether Atelier <small>色の試し描き（1回目）</small></h1>
+  <nav><a href="./">試作へ戻る</a></nav>
+</header>
+<div class="page">
+  <p class="note">中身の表の素材22個と機械14種を、色と形で描いた1回目です。見てほしいのは3つ：ベルトの上の大きさで見分けられるか、範囲で変わる前と後がつながって見えるか、雰囲気（明るい工房）に合うか。絵は16×16のドットで、本番の絵はフェーズ7で描き直します。</p>
+
+  <h2>1. 素材（実際の大きさ／大きく）</h2>
+  <p class="note">左上の灰色のマスの絵が、ベルトの上に流れるときの大きさ（1マス40ドットに32ドット）です。</p>
+  <div id="items" class="tiles"></div>
+
+  <h2>2. 範囲で変わる素材</h2>
+  <p class="note">変わる前と後で形を残し、色だけ変える（熱は橙・赤、冷気は青・紫）。</p>
+  <div id="chains"></div>
+
+  <h2>3. 盤面の上で</h2>
+  <p class="note">熱（橙の塗り）・冷気（青の塗り）・魔力（マスの四隅の紫の点）の範囲を重ねた盤面に、機械とベルトと素材を置いた見本。真ん中の灰色のマスは、熱と冷気が打ち消し合っているところ。</p>
+  <div class="row board">
+    <figure><canvas id="board"></canvas><figcaption>そのままの色</figcaption></figure>
+  </div>
+
+  <h2>4. 機械</h2>
+  <p class="note">色の家族で種類を分ける：木は茶、金属は灰、火は赤、霜は青、魔力は紫・青緑。左上の紫の点は「魔力が要る」、ギザギザは「揺れる」。</p>
+  <div id="machines" class="tiles"></div>
+
+  <h2>5. 見分けやすさ</h2>
+  <p class="note">同じ盤面を、色の見え方を変えて並べました。色だけでなく形でも見分けられるかを見ます。</p>
+  <div class="row board">
+    <figure><canvas id="b-gray" class="gray"></canvas><figcaption>白黒</figcaption></figure>
+    <figure><canvas id="b-protan" class="protan"></canvas><figcaption>1型色覚（赤が見えにくい）</figcaption></figure>
+    <figure><canvas id="b-deutan" class="deutan"></canvas><figcaption>2型色覚（緑が見えにくい）</figcaption></figure>
+  </div>
+</div>
+<svg width="0" height="0" style="position:absolute">
+  <filter id="protan" color-interpolation-filters="linearRGB">
+    <feColorMatrix type="matrix" values="0.152 1.053 -0.205 0 0  0.115 0.786 0.099 0 0  -0.004 -0.048 1.052 0 0  0 0 0 1 0"/>
+  </filter>
+  <filter id="deutan" color-interpolation-filters="linearRGB">
+    <feColorMatrix type="matrix" values="0.367 0.861 -0.228 0 0  0.280 0.673 0.047 0 0  -0.012 0.043 0.969 0 0  0 0 0 1 0"/>
+  </filter>
+</svg>
+<script type="module">
+import draft from './src/data/content-draft.js';
+import { drawItem, ITEM_COLORS, MACHINE_STYLE, FIELD_TINT } from './src/ui/sprites.js';
+
+const C = 40;
+const dpr = window.devicePixelRatio || 1;
+function canvas(w, h) {
+  const c = document.createElement('canvas');
+  c.width = w * dpr; c.height = h * dpr;
+  c.style.width = `${w}px`; c.style.height = `${h}px`;
+  const ctx = c.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.imageSmoothingEnabled = false;
+  return [c, ctx];
+}
+
+function itemTile(id) {
+  const t = document.createElement('div');
+  t.className = 'tile';
+  const [c, ctx] = canvas(96, 64);
+  ctx.fillStyle = '#9b958c'; ctx.fillRect(2, 2, 36, 36);
+  drawItem(ctx, id, 20, 20, 32);
+  drawItem(ctx, id, 70, 34, 48);
+  t.append(c);
+  t.insertAdjacentHTML('beforeend', `<b>${draft.items[id].name}</b><span>${draft.items[id].sys}　${ITEM_COLORS[id]}</span>`);
+  return t;
+}
+const items = document.getElementById('items');
+for (const id of Object.keys(draft.items)) items.append(itemTile(id));
+
+const chains = [
+  [['ore', ''], ['molten', '熱の中を3マス'], ['plate', '鋳型台']],
+  [['plate', ''], ['redplate', '熱の中を3マス'], ['steel', '冷気の中を2マス']],
+  [['glassmix', ''], ['glass', '熱の中を5マス'], ['lens', '研磨機']],
+  [['aether', ''], ['crystal', '冷気の中を4マス'], ['lens', '研磨機（別レシピ）']],
+];
+const chainBox = document.getElementById('chains');
+for (const ch of chains) {
+  const row = document.createElement('div');
+  row.className = 'chain';
+  ch.forEach(([id, how], i) => {
+    if (i) row.insertAdjacentHTML('beforeend', `<span class="arrow">→ ${how} →</span>`);
+    row.append(itemTile(id));
+  });
+  chainBox.append(row);
+}
+
+function machineBox(ctx, id, x, y) {
+  const b = draft.buildings[id], st = MACHINE_STYLE[id];
+  const w = b.w * C, h = b.h * C;
+  ctx.fillStyle = st.body;
+  ctx.beginPath(); ctx.roundRect(x + 2, y + 2, w - 4, h - 4, 6); ctx.fill();
+  ctx.fillStyle = 'rgba(0,0,0,0.18)';
+  ctx.fillRect(x + 2, y + h - 8, w - 4, 6);
+  ctx.fillStyle = '#fff';
+  ctx.font = `600 ${b.w === 1 ? 10 : 13}px system-ui, sans-serif`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(b.name, x + w / 2, y + h / 2);
+  if (b.mana) { ctx.fillStyle = '#c9b2ff'; ctx.beginPath(); ctx.arc(x + 9, y + 9, 4, 0, 7); ctx.fill(); ctx.strokeStyle = '#2e1f6b'; ctx.lineWidth = 1; ctx.stroke(); }
+  if (b.shake) {
+    ctx.strokeStyle = '#ffe08a'; ctx.lineWidth = 2; ctx.beginPath();
+    for (let i = 0; i < 5; i++) ctx.lineTo(x + w - 26 + i * 5, y + 8 + (i % 2) * 5);
+    ctx.stroke();
+  }
+}
+
+const machines = document.getElementById('machines');
+for (const id of Object.keys(draft.buildings)) {
+  const b = draft.buildings[id];
+  const t = document.createElement('div');
+  t.className = 'tile';
+  const [c, ctx] = canvas(Math.max(80, b.w * C + 8), b.h * C + 8);
+  machineBox(ctx, id, (Math.max(80, b.w * C + 8) - b.w * C) / 2, 4);
+  t.append(c);
+  t.insertAdjacentHTML('beforeend', `<b>${b.name}</b><span>${MACHINE_STYLE[id].kind}　${b.w}×${b.h}</span>`);
+  machines.append(t);
+}
+
+// 魔力の範囲は塗らずに、マスの四隅の紫の点で見せる（冷気の青と混ざらないように）
+function manaMark(ctx, x, y) {
+  ctx.fillStyle = '#8a5ae6';
+  for (const [dx, dy] of [[4, 4], [C - 7, 4], [4, C - 7], [C - 7, C - 7]]) ctx.fillRect(x * C + dx, y * C + dy, 3, 3);
+}
+
+// 見本の盤面：14×8
+function drawBoard(ctx) {
+  const W = 14, H = 8;
+  ctx.fillStyle = '#f4efe6'; ctx.fillRect(0, 0, W * C, H * C);
+  const heat = (x, y) => x >= 1 && x <= 6 && y >= 0 && y <= 5;
+  const cold = (x, y) => x >= 6 && x <= 10 && y >= 2 && y <= 6;
+  const mana = (x, y) => x >= 8 && x <= 13 && y >= 0 && y <= 7;
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const h = heat(x, y), c = cold(x, y);
+    if (h && c) { ctx.fillStyle = 'rgba(120,120,120,0.22)'; ctx.fillRect(x * C, y * C, C, C); continue; }
+    if (h) { ctx.fillStyle = FIELD_TINT.heat; ctx.fillRect(x * C, y * C, C, C); }
+    if (c) { ctx.fillStyle = FIELD_TINT.cold; ctx.fillRect(x * C, y * C, C, C); }
+    if (mana(x, y)) manaMark(ctx, x, y);
+  }
+  ctx.strokeStyle = 'rgba(90,70,40,0.12)'; ctx.lineWidth = 1; ctx.beginPath();
+  for (let x = 1; x < W; x++) { ctx.moveTo(x * C + 0.5, 0); ctx.lineTo(x * C + 0.5, H * C); }
+  for (let y = 1; y < H; y++) { ctx.moveTo(0, y * C + 0.5); ctx.lineTo(W * C, y * C + 0.5); }
+  ctx.stroke();
+  machineBox(ctx, 'furnace', 3 * C, 2 * C);
+  machineBox(ctx, 'frostPillar', 8 * C, 4 * C);
+  machineBox(ctx, 'manaFurnace', 11 * C, 2 * C);
+  machineBox(ctx, 'workbench', 10 * C, 5 * C);
+  machineBox(ctx, 'press', 0, 6 * C);
+  // ベルト：上の列は左から右、下の列は熱と冷気を通る
+  const belt = (x, y) => { ctx.fillStyle = '#9b958c'; ctx.fillRect(x * C + 1, y * C + 1, C - 2, C - 2); };
+  const row1 = ['ore', 'ore', 'molten', 'molten', 'plate', 'plate', 'redplate', 'redplate', 'steel', 'steel', 'aether'];
+  row1.forEach((id, i) => { belt(i, 1); drawItem(ctx, id, i * C + 20, C + 20, 32); });
+  const row2 = ['plank', 'frame', 'gear', 'screw', 'glassmix', 'glass', 'aether', 'crystal', 'lens', 'fuel'];
+  row2.forEach((id, i) => { belt(i, 4 + (i > 6 ? 0 : 0)); drawItem(ctx, id, i * C + 20, 4 * C + 20, 32); });
+  const row3 = ['dust', 'sand', 'gearbox', 'spring', 'clockwork', 'lantern', 'wood'];
+  row3.forEach((id, i) => { belt(i + 2, 7); drawItem(ctx, id, (i + 2) * C + 20, 7 * C + 20, 32); });
+}
+for (const id of ['board', 'b-gray', 'b-protan', 'b-deutan']) {
+  const el = document.getElementById(id);
+  const small = id !== 'board';
+  const w = 14 * C, h = 8 * C;
+  el.width = w * dpr; el.height = h * dpr;
+  el.style.width = `${small ? w * 0.55 : w}px`; el.style.height = `${small ? h * 0.55 : h}px`;
+  const ctx = el.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.imageSmoothingEnabled = false;
+  drawBoard(ctx);
+}
+</script>
+</body>
+</html>
