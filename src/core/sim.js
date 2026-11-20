@@ -7,9 +7,11 @@ export const TPS = 10; // 1秒の刻み数
 export const BELT_TICKS = 5; // 1マス進むのにかかる刻み
 export const DX = [1, 0, -1, 0];
 export const DY = [0, 1, 0, -1];
-const FIELDS = ['heat', 'cold'];
+const FIELDS = ['heat', 'cold', 'mana'];
 
-export function createWorld({ w, h, blocked = [] }, data) {
+// blocked：置けないマス（柱など）。rubble：瓦礫のマス（片づけると置ける）
+export const WALL = 1, RUBBLE = 2;
+export function createWorld({ w, h, blocked = [], rubble = [] }, data) {
   const world = {
     w, h, data,
     blocked: new Uint8Array(w * h),
@@ -21,9 +23,11 @@ export function createWorld({ w, h, blocked = [] }, data) {
     delivered: {}, // 納めた合計
     hist: [], // 1秒ごとの納めた数（直近60秒）
     cur: {},
+    tickOut: {}, // この刻みで納めた数（倉庫へ送る）
   };
   for (const f of FIELDS) world.fields[f] = new Uint8Array(w * h);
-  for (const [x, y] of blocked) world.blocked[y * w + x] = 1;
+  for (const [x, y] of blocked) world.blocked[y * w + x] = WALL;
+  for (const [x, y] of rubble) world.blocked[y * w + x] = RUBBLE;
   return world;
 }
 
@@ -39,14 +43,22 @@ export function canPlace(world, id, x, y) {
     for (let i = 0; i < def.w; i++) {
       const cx = x + i, cy = y + j;
       if (cx < 0 || cy < 0 || cx >= world.w || cy >= world.h) return { ok: false, reason: '区画の外' };
-      if (world.blocked[cy * world.w + cx]) return { ok: false, reason: '置けないマス' };
+      const b = world.blocked[cy * world.w + cx];
+      if (b) return { ok: false, reason: b === RUBBLE ? '瓦礫がある' : '置けないマス' };
       if (world.grid[cy * world.w + cx]) return { ok: false, reason: 'ほかの物がある' };
     }
   }
   return { ok: true };
 }
 
+// 瓦礫のマスを空ける
+export function clearTiles(world, tiles) {
+  for (const [x, y] of tiles) if (world.blocked[y * world.w + x] === RUBBLE) world.blocked[y * world.w + x] = 0;
+  world.dirty = true;
+}
+
 // props：recipe（機械）、item（出す口が出す素材）、fixed（壊せない）、interval（出す口の間隔）
+//        imported（前の区画の物を出す口。credit の数だけ出せる）
 export function place(world, id, x, y, dir = 0, props = {}) {
   if (!canPlace(world, id, x, y).ok) return null;
   const def = world.data.buildings[id];
@@ -55,7 +67,10 @@ export function place(world, id, x, y, dir = 0, props = {}) {
     outs: [], feeders: [], rr: 0, lastFrom: null,
   };
   if (e.kind === 'belt' || e.kind === 'splitter') e.item = null;
-  if (e.kind === 'source') { e.item = props.item ?? null; e.interval = props.interval ?? BELT_TICKS; e.cool = 0; }
+  if (e.kind === 'source') {
+    e.item = props.item ?? null; e.interval = props.interval ?? BELT_TICKS; e.cool = 0;
+    if (props.imported) { e.imported = true; e.credit = 0; }
+  }
   if (e.kind === 'sink') e.count = {};
   if (e.kind === 'machine') {
     e.recipe = props.recipe ?? def.recipes[0] ?? null;
@@ -172,7 +187,7 @@ export function rebuild(world) {
 
 function ready(f) {
   if (f.kind === 'belt' || f.kind === 'splitter') return !!f.item && f.item.p >= BELT_TICKS;
-  if (f.kind === 'source') return !!f.item && f.cool <= 0;
+  if (f.kind === 'source') return !!f.item && f.cool <= 0 && (!f.imported || f.credit >= 1);
   if (f.kind === 'machine') return Object.values(f.outbuf).some((n) => n > 0);
   return false;
 }
@@ -211,6 +226,7 @@ function push(world, from, target, item) {
       target.count[item.t] = (target.count[item.t] || 0) + 1;
       world.delivered[item.t] = (world.delivered[item.t] || 0) + 1;
       world.cur[item.t] = (world.cur[item.t] || 0) + 1;
+      world.tickOut[item.t] = (world.tickOut[item.t] || 0) + 1;
       return true;
     default:
       return false;
@@ -258,6 +274,7 @@ function stepMachine(world, m) {
 export function step(world) {
   if (world.dirty) rebuild(world);
   world.tick++;
+  world.tickOut = {};
   for (const h of world.holders) {
     if (!h.item) continue;
     if (h.item.p < BELT_TICKS) h.item.p++;
@@ -269,7 +286,8 @@ export function step(world) {
   }
   for (const m of world.machines) stepMachine(world, m);
   for (const s of world.sources) {
-    if (s.item && s.cool <= 0 && tryOut(world, s, { t: s.item, p: 0, ex: 0 })) s.cool = s.interval;
+    if (!s.item || s.cool > 0 || (s.imported && s.credit < 1)) continue;
+    if (tryOut(world, s, { t: s.item, p: 0, ex: 0 })) { s.cool = s.interval; if (s.imported) s.credit--; }
   }
   if (world.tick % TPS === 0) {
     world.hist.push(world.cur);
@@ -299,7 +317,7 @@ export function serialize(world) {
       const o = { id: e.id, x: e.x, y: e.y, dir: e.dir };
       if (e.fixed) o.fixed = true;
       if (e.kind === 'machine') o.recipe = e.recipe;
-      if (e.kind === 'source') { o.item = e.item; if (e.interval !== BELT_TICKS) o.interval = e.interval; }
+      if (e.kind === 'source') { o.item = e.item; if (e.interval !== BELT_TICKS) o.interval = e.interval; if (e.imported) o.imported = true; }
       return o;
     }),
   };

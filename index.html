@@ -8,8 +8,12 @@
 </head>
 <body>
 <header>
-  <h1>Aether Atelier <small>試作</small></h1>
-  <nav id="tabs"></nav>
+  <h1>Aether Atelier <small>霧の町ミストヘイヴン</small></h1>
+  <nav id="nav">
+    <button data-go="#/map">町の地図</button>
+    <button data-go="#/book">図鑑</button>
+    <span id="where"></span>
+  </nav>
   <div class="speed">
     <button id="pause" title="Space">一時停止</button>
     <button data-speed="1" class="on">1倍</button>
@@ -17,7 +21,28 @@
     <button data-speed="4">4倍</button>
   </div>
 </header>
-<main>
+
+<main id="screen-map" class="screen">
+  <section class="map-main">
+    <p class="lead">灯りが消えて寂れた霧の町。工房の新しい主として、区画ごとに工場を建て、町を元に戻していく。開いた区画は、見ていない間も動き続ける。</p>
+    <div id="map-grid"></div>
+  </section>
+  <aside class="map-side">
+    <h2>倉庫（毎分）</h2>
+    <table id="warehouse"></table>
+    <p class="hint">入る＝区画が納めた量。使われる＝あとの区画の口が受け取った量。余り＝誰も受け取らなかった量（瓦礫の片づけに使える）。</p>
+  </aside>
+</main>
+
+<main id="screen-book" class="screen">
+  <section class="book-main">
+    <h2>図鑑</h2>
+    <p class="hint">工場で見たことのある物が載る。</p>
+    <div id="book"></div>
+  </section>
+</main>
+
+<main id="screen-district" class="screen">
   <aside id="left">
     <h2>置く物</h2>
     <div id="palette"></div>
@@ -40,10 +65,14 @@
   <aside id="right">
     <h2>依頼</h2>
     <div id="requests"></div>
-    <h2>納めている量（毎分）</h2>
+    <div id="imports-box">
+      <h2>前の区画から受け取る（毎分）</h2>
+      <div id="imports"></div>
+    </div>
+    <h2>この区画が納めている量（毎分）</h2>
     <div id="rates"></div>
-    <h2>素材</h2>
-    <div id="legend"></div>
+    <h2>瓦礫</h2>
+    <div id="rubble"></div>
   </aside>
 </main>
 <div id="toast"></div>
