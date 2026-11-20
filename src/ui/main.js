@@ -353,7 +353,8 @@ $('openall').onclick = () => {
 
 const STATUS = {
   working: '動いている', waiting: '材料待ち', blocked: '出口が詰まっている', 'no-field': '範囲の外', 'no-recipe': 'レシピなし',
-  'no-mana': '魔力が届いていない（魔力炉の範囲に全部のマスを入れて、燃料を入れる）',
+  'no-mana': '魔力炉の範囲の外なので止まっている（機械の全部のマスを紫の点の中に入れる）',
+  'no-fuel': '魔力炉に燃料がないので止まっている（燃料をベルトで魔力炉へ運ぶ）',
 };
 const FIELD_TEXT = {
   heat: '周りに熱の範囲を作る。熱の中を3マス進んだ鉱石は溶け、金属板は赤熱する。ガラスの素は5マスでガラスになる',
@@ -363,12 +364,12 @@ function emitterInfo(e) {
   const b = buildings[e.id];
   if (b.field !== 'mana') {
     let s = `：${FIELD_TEXT[b.field]}`;
-    if (e.needsMana) s += e.on ? '｜魔力が届いている' : '｜魔力が届いていないので止まっている';
+    if (e.needsMana) s += e.on ? '｜魔力が届いている' : `｜${STATUS[e.suppliers?.length ? 'no-fuel' : 'no-mana']}`;
     return s;
   }
   if (world.leyline) return '：この区画は地脈があるので、魔力は要らない';
   const n = e.covers?.length ?? 0;
-  return `：燃料を毎分${b.fuelPerMin}燃やし、範囲の魔力が要る機械${b.powers}台まで動かす｜燃料 ${e.fuel}/${FUEL_CAP}・${e.burning ? '燃えている' : '止まっている'}｜範囲の機械 ${n}台${n > b.powers ? `（多いので全部 ${b.powers}/${n} の速さ）` : ''}`;
+  return `：燃料を毎分${b.fuelPerMin}燃やし、範囲の魔力が要る機械${b.powers}台まで動かす｜燃料 ${e.fuel}/${FUEL_CAP}・${e.burning ? '燃えている' : e.fuel > 0 ? '待っている（範囲に魔力の要る機械がない）' : '燃料がない'}｜範囲の機械 ${n}台${n > b.powers ? `（多いので全部 ${b.powers}/${n} の速さ）` : ''}`;
 }
 function underInfo(e) {
   const side = e.role === 'in' ? '（入口）' : '（出口）';

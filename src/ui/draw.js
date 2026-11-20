@@ -4,8 +4,8 @@ import { drawItem, MACHINE_STYLE, FIELD_TINT } from './sprites.js';
 
 export const CELL = 40;
 const C = CELL;
-const LAMP = { working: '#3f8a4d', waiting: '#d9a514', blocked: '#c0392b', 'no-field': '#c0392b', 'no-recipe': '#999', 'no-mana': '#c0392b' };
-const LABEL = { waiting: '材料待ち', blocked: '出口づまり', 'no-field': '範囲の外', 'no-mana': '魔力なし' };
+const LAMP = { working: '#3f8a4d', waiting: '#d9a514', blocked: '#c0392b', 'no-field': '#c0392b', 'no-recipe': '#999', 'no-mana': '#c0392b', 'no-fuel': '#c0392b' };
+const LABEL = { waiting: '材料待ち', blocked: '出口づまり', 'no-field': '範囲の外', 'no-mana': '魔力の範囲外', 'no-fuel': '魔力炉が空' };
 
 function lamp(ctx, x, y, color) {
   ctx.fillStyle = color;
@@ -93,17 +93,20 @@ function drawEnt(ctx, world, e, opts) {
     ctx.fillRect(x + 2, y + h - 8, w - 4, 6);
     ctx.fillStyle = '#fff';
     ctx.font = `600 ${e.w === 1 ? 10 : 13}px system-ui, sans-serif`;
-    ctx.fillText(data.buildings[e.id].name, cx, cy - (e.kind === 'machine' && e.w > 1 ? 8 : 0));
+    // 下に札（状態）を書く物は、名前を少し上へ
+    const sub = e.w > 1 && (e.kind === 'machine' || (e.kind === 'emitter' && !world.leyline && (e.fuelIn || e.needsMana)));
+    ctx.fillText(data.buildings[e.id].name, cx, cy - (sub ? 8 : 0));
     if (e.kind === 'emitter' && (e.fuelIn || e.needsMana) && !world.leyline) {
       // 魔力炉は燃えているか、竜炉などは魔力が届いているか
       const on = e.fuelIn ? e.burning : e.on;
-      lamp(ctx, x, y, on ? LAMP.working : LAMP['no-mana']);
+      const idle = e.fuelIn && !on && e.fuel > 0; // 燃料はあるが、範囲に魔力の要る機械がない
+      lamp(ctx, x, y, on ? LAMP.working : idle ? LAMP['no-recipe'] : LAMP['no-mana']);
       ctx.fillStyle = '#fff';
       ctx.font = '11px system-ui, sans-serif';
       if (e.fuelIn) {
-        ctx.fillText(on ? '燃えている' : '燃料なし', cx, cy + 9);
+        ctx.fillText(on ? '燃えている' : idle ? '待っている' : '燃料なし', cx, cy + 9);
         for (let i = 0; i < e.fuel; i++) { ctx.fillStyle = '#ffd166'; ctx.fillRect(x + w - 10, y + 6 + i * 6, 4, 4); }
-      } else if (!on) ctx.fillText('魔力なし', cx, cy + 9);
+      } else if (!on) ctx.fillText(e.suppliers?.length ? LABEL['no-fuel'] : LABEL['no-mana'], cx, cy + 9);
     }
     if (e.kind === 'machine') {
       frontEdge(ctx, e, '#fff3d6');

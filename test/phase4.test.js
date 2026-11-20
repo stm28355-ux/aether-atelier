@@ -93,6 +93,7 @@ test('魔力：燃料がないと動かない。燃料を入れると動く', ()
   const dry = polisherLine({ fuel: false });
   run(dry, 70 * 10);
   assert.equal(rate(dry, 'lens'), 0);
+  assert.equal(entAt(dry, 2, 0).status, 'no-fuel'); // 範囲の中だが、炉に燃料がない
   const wet = polisherLine();
   run(wet, 70 * 10);
   assert.equal(rate(wet, 'lens'), 15);

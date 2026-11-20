@@ -369,6 +369,9 @@ function applyFields(world, h) {
   }
 }
 
+// 魔力が届かない理由：範囲の外（no-mana）か、届く魔力炉はあるが燃えていない（no-fuel）か
+const noPower = (m) => (m.suppliers.length ? 'no-fuel' : 'no-mana');
+
 function stepMachine(world, m) {
   const r = world.data.recipes[m.recipe];
   if (!r) { m.status = 'no-recipe'; return; }
@@ -378,7 +381,7 @@ function stepMachine(world, m) {
   const powered = !m.needsMana || m.pn > 0;
   m.slow = m.needsMana && powered && m.pn < m.pd;
   if (m.left > 0) {
-    if (!powered) { m.status = 'no-mana'; return; }
+    if (!powered) { m.status = noPower(m); return; }
     let go = true;
     if (m.slow) { m.acc += m.pn; if (m.acc >= m.pd) m.acc -= m.pd; else go = false; }
     if (go) {
@@ -388,7 +391,7 @@ function stepMachine(world, m) {
   }
   if (m.left > 0) { m.status = 'working'; return; }
   if (r.field && !machineInField(world, m, r.field)) { m.status = 'no-field'; return; }
-  if (!powered) { m.status = 'no-mana'; return; }
+  if (!powered) { m.status = noPower(m); return; }
   for (const t in r.out) if ((m.outbuf[t] || 0) >= r.out[t] * 2) { m.status = 'blocked'; return; }
   for (const t in r.in) if ((m.inbuf[t] || 0) < r.in[t]) { m.status = 'waiting'; return; }
   for (const t in r.in) m.inbuf[t] -= r.in[t];
