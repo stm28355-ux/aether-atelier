@@ -4,8 +4,29 @@ import { drawItem, MACHINE_STYLE, FIELD_TINT } from './sprites.js';
 
 export const CELL = 40;
 const C = CELL;
-const LAMP = { working: '#3f8a4d', waiting: '#d9a514', blocked: '#c0392b', 'no-field': '#c0392b', 'no-recipe': '#999' };
-const LABEL = { waiting: '材料待ち', blocked: '出口づまり', 'no-field': '範囲の外' };
+const LAMP = { working: '#3f8a4d', waiting: '#d9a514', blocked: '#c0392b', 'no-field': '#c0392b', 'no-recipe': '#999', 'no-mana': '#c0392b' };
+const LABEL = { waiting: '材料待ち', blocked: '出口づまり', 'no-field': '範囲の外', 'no-mana': '魔力なし' };
+
+function lamp(ctx, x, y, color) {
+  ctx.fillStyle = color;
+  ctx.beginPath(); ctx.arc(x + 11, y + 11, 5, 0, 7); ctx.fill();
+  ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.stroke();
+}
+
+// 下をくぐるベルト：入口は正面側、出口は後ろ側が暗い（穴）
+function drawUnder(ctx, e, role, ghost) {
+  const x = e.x * C, y = e.y * C, cx = x + C / 2, cy = y + C / 2;
+  if (!ghost) { ctx.fillStyle = '#857e74'; ctx.fillRect(x + 1, y + 1, C - 2, C - 2); }
+  const d = role === 'in' ? e.dir : (e.dir + 2) & 3;
+  ctx.fillStyle = ghost ? 'rgba(43,33,24,0.55)' : '#3b352e';
+  const t = 15;
+  if (d === 0) ctx.fillRect(x + C - t, y + 4, t - 3, C - 8);
+  else if (d === 1) ctx.fillRect(x + 4, y + C - t, C - 8, t - 3);
+  else if (d === 2) ctx.fillRect(x + 3, y + 4, t - 3, C - 8);
+  else ctx.fillRect(x + 4, y + 3, C - 8, t - 3);
+  arrow(ctx, cx - DX[d] * 4, cy - DY[d] * 4, e.dir, 8, ghost ? '#2b2118' : '#efe9de');
+  if (!ghost && !e.partner) { ctx.strokeStyle = '#c0392b'; ctx.lineWidth = 2; ctx.strokeRect(x + 2, y + 2, C - 4, C - 4); }
+}
 const RANGE = { heat: ['rgba(255,110,30,0.18)', '#d2571a'], cold: ['rgba(60,150,255,0.18)', '#2f7fd0'], mana: ['rgba(140,90,230,0.12)', '#7a4fd8'] };
 
 function arrow(ctx, cx, cy, dir, size, color) {
@@ -45,6 +66,8 @@ function drawEnt(ctx, world, e, opts) {
     ctx.fillStyle = '#9b958c';
     ctx.fillRect(x + 1, y + 1, C - 2, C - 2);
     arrow(ctx, cx, cy, e.dir, 10, '#c9c3b8');
+  } else if (e.kind === 'under') {
+    drawUnder(ctx, e, e.role, false);
   } else if (e.kind === 'splitter') {
     ctx.fillStyle = '#5f7391';
     ctx.fillRect(x + 1, y + 1, C - 2, C - 2);
@@ -71,15 +94,26 @@ function drawEnt(ctx, world, e, opts) {
     ctx.fillStyle = '#fff';
     ctx.font = `600 ${e.w === 1 ? 10 : 13}px system-ui, sans-serif`;
     ctx.fillText(data.buildings[e.id].name, cx, cy - (e.kind === 'machine' && e.w > 1 ? 8 : 0));
+    if (e.kind === 'emitter' && (e.fuelIn || e.needsMana) && !world.leyline) {
+      // 魔力炉は燃えているか、竜炉などは魔力が届いているか
+      const on = e.fuelIn ? e.burning : e.on;
+      lamp(ctx, x, y, on ? LAMP.working : LAMP['no-mana']);
+      ctx.fillStyle = '#fff';
+      ctx.font = '11px system-ui, sans-serif';
+      if (e.fuelIn) {
+        ctx.fillText(on ? '燃えている' : '燃料なし', cx, cy + 9);
+        for (let i = 0; i < e.fuel; i++) { ctx.fillStyle = '#ffd166'; ctx.fillRect(x + w - 10, y + 6 + i * 6, 4, 4); }
+      } else if (!on) ctx.fillText('魔力なし', cx, cy + 9);
+    }
     if (e.kind === 'machine') {
       frontEdge(ctx, e, '#fff3d6');
-      ctx.fillStyle = LAMP[e.status];
-      ctx.beginPath(); ctx.arc(x + 11, y + 11, 5, 0, 7); ctx.fill();
-      ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.stroke();
-      if (LABEL[e.status] && e.w > 1) {
+      const slow = e.slow && e.status === 'working';
+      lamp(ctx, x, y, slow ? LAMP.waiting : LAMP[e.status]);
+      const label = slow ? '魔力不足' : LABEL[e.status];
+      if (label && e.w > 1) {
         ctx.fillStyle = '#fff';
         ctx.font = '11px system-ui, sans-serif';
-        ctx.fillText(LABEL[e.status], cx, cy + 9);
+        ctx.fillText(label, cx, cy + 9);
       }
       const r = data.recipes[e.recipe];
       if (r && e.left > 0) {
@@ -152,8 +186,16 @@ export function draw(ctx, world, opts = {}) {
     ctx.setLineDash([]);
   }
 
+  // 下をくぐるベルトの組（地面の下の線）
+  ctx.strokeStyle = 'rgba(59,53,46,0.45)'; ctx.lineWidth = 3; ctx.setLineDash([4, 5]);
+  for (const e of world.ents) {
+    if (e.kind !== 'under' || e.role !== 'in' || !e.partner) continue;
+    ctx.beginPath(); ctx.moveTo((e.x + 0.5) * C, (e.y + 0.5) * C); ctx.lineTo((e.partner.x + 0.5) * C, (e.partner.y + 0.5) * C); ctx.stroke();
+  }
+  ctx.setLineDash([]);
+
   for (const e of world.ents) drawEnt(ctx, world, e, opts);
-  for (const e of world.ents) if ((e.kind === 'belt' || e.kind === 'splitter') && e.item) drawItemOnBelt(ctx, e, opts.alpha || 0);
+  for (const e of world.ents) if ((e.kind === 'belt' || e.kind === 'splitter' || e.kind === 'under') && e.item) drawItemOnBelt(ctx, e, opts.alpha || 0);
 
   if (opts.tool && opts.hover) {
     const b = world.data.buildings[opts.tool];
@@ -175,7 +217,11 @@ export function draw(ctx, world, opts = {}) {
     ctx.lineWidth = 2;
     ctx.strokeRect(x * C + 1, y * C + 1, b.w * C - 2, b.h * C - 2);
     const ghost = { x, y, w: b.w, h: b.h, dir: opts.dir };
-    if (b.kind === 'machine') frontEdge(ctx, ghost, '#2b2118');
+    if (b.kind === 'under') {
+      drawUnder(ctx, ghost, opts.underRole || 'in', true);
+      ctx.fillStyle = '#2b2118'; ctx.font = '600 11px system-ui, sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText(opts.underRole === 'out' ? '出口' : '入口', x * C + C / 2, y * C - 7);
+    } else if (b.kind === 'machine') frontEdge(ctx, ghost, '#2b2118');
     else if (b.kind === 'belt' || b.kind === 'splitter') arrow(ctx, x * C + C / 2, y * C + C / 2, opts.dir, 10, '#2b2118');
   }
 }

@@ -2,18 +2,24 @@
 //
 // 向き：0=右(東) 1=下(南) 2=左(西) 3=上(北)
 // ベルトと分岐は、1マスに素材を1個だけ持つ。素材は BELT_TICKS 刻みで次のマスへ進む。
+// 下をくぐるベルト（under）：入口と出口の間の UNDER_GAP マスまでを下でつなぐ。くぐっている間は範囲が効かない。
+// 魔力：地脈のない区画（leyline: false）では、mana の付いた機械は魔力炉の範囲に入っていないと動かない。
+//       魔力炉は燃料を毎分 fuelPerMin 燃やし、範囲の機械 powers 台まで動かす。多いと全部が遅くなる。
 
 export const TPS = 10; // 1秒の刻み数
 export const BELT_TICKS = 5; // 1マス進むのにかかる刻み
 export const DX = [1, 0, -1, 0];
 export const DY = [0, 1, 0, -1];
+export const UNDER_GAP = 4; // 下をくぐれるマス数
+export const FUEL_CAP = 4; // 魔力炉にためられる燃料
 const FIELDS = ['heat', 'cold', 'mana'];
 
 // blocked：置けないマス（柱など）。rubble：瓦礫のマス（片づけると置ける）
 export const WALL = 1, RUBBLE = 2;
-export function createWorld({ w, h, blocked = [], rubble = [] }, data) {
+export function createWorld({ w, h, blocked = [], rubble = [], leyline = true }, data) {
   const world = {
-    w, h, data,
+    w, h, data, leyline,
+    manaFurnaces: [], consumers: [],
     blocked: new Uint8Array(w * h),
     grid: new Array(w * h).fill(null),
     ents: [],
@@ -67,6 +73,8 @@ export function place(world, id, x, y, dir = 0, props = {}) {
     outs: [], feeders: [], rr: 0, lastFrom: null,
   };
   if (e.kind === 'belt' || e.kind === 'splitter') e.item = null;
+  if (e.kind === 'under') { e.item = null; e.role = props.role === 'out' ? 'out' : 'in'; e.partner = null; e.tube = []; }
+  if (e.kind === 'emitter') { e.on = true; if (def.fuelPerMin) { e.fuel = 0; e.burn = 0; e.burning = false; } }
   if (e.kind === 'source') {
     e.item = props.item ?? null; e.interval = props.interval ?? BELT_TICKS; e.cool = 0;
     if (props.imported) { e.imported = true; e.credit = 0; }
@@ -74,7 +82,7 @@ export function place(world, id, x, y, dir = 0, props = {}) {
   if (e.kind === 'sink') e.count = {};
   if (e.kind === 'machine') {
     e.recipe = props.recipe ?? def.recipes[0] ?? null;
-    e.inbuf = {}; e.outbuf = {}; e.left = 0; e.status = 'waiting';
+    e.inbuf = {}; e.outbuf = {}; e.left = 0; e.status = 'waiting'; e.acc = 0;
   }
   world.ents.push(e);
   for (let j = 0; j < e.h; j++) for (let i = 0; i < e.w; i++) world.grid[(y + j) * world.w + x + i] = e;
@@ -116,6 +124,10 @@ function canConnect(target, fx, fy) {
   switch (target.kind) {
     case 'belt': // 向かい合わせは不可
       return !(target.x + DX[target.dir] === fx && target.y + DY[target.dir] === fy);
+    case 'under': // 入口はベルトと同じ。出口は下からだけ
+      return target.role === 'in' && !(target.x + DX[target.dir] === fx && target.y + DY[target.dir] === fy);
+    case 'emitter': // 魔力炉は燃料をどの辺からでも受け取る
+      return !!target.fuelIn;
     case 'splitter': // 後ろからだけ
       return target.x - DX[target.dir] === fx && target.y - DY[target.dir] === fy;
     case 'machine': // 正面の辺は出口なので入れない
@@ -138,21 +150,120 @@ function addOut(world, e, fx, fy, d) {
   if (!t.feeders.includes(e)) t.feeders.push(e);
 }
 
-export function rebuild(world) {
-  const { ents } = world;
+// 範囲の四角（区画の外も含む）
+export function reach(world, e) {
+  const r = world.data.buildings[e.id].radius;
+  return { x0: e.x - r, y0: e.y - r, x1: e.x + e.w + r - 1, y1: e.y + e.h + r - 1 };
+}
+const inside = (b, e) => e.x >= b.x0 && e.y >= b.y0 && e.x + e.w - 1 <= b.x1 && e.y + e.h - 1 <= b.y1;
+
+// 範囲を塗り直す。熱と冷気は、動いている（魔力が届いている）源だけ。魔力の範囲は炉を置いただけで見せる
+function computeFields(world) {
   for (const f of FIELDS) world.fields[f].fill(0);
-  for (const e of ents) {
-    e.outs = []; e.feeders = [];
+  for (const e of world.ents) {
     if (e.kind !== 'emitter') continue;
     const def = world.data.buildings[e.id];
-    for (let y = e.y - def.radius; y < e.y + e.h + def.radius; y++) {
-      for (let x = e.x - def.radius; x < e.x + e.w + def.radius; x++) {
-        if (x >= 0 && y >= 0 && x < world.w && y < world.h) world.fields[def.field][y * world.w + x]++;
-      }
+    if (def.field !== 'mana' && !e.on) continue;
+    const b = reach(world, e);
+    for (let y = Math.max(0, b.y0); y <= Math.min(world.h - 1, b.y1); y++) {
+      for (let x = Math.max(0, b.x0); x <= Math.min(world.w - 1, b.x1); x++) world.fields[def.field][y * world.w + x]++;
     }
   }
+}
+
+// 下をくぐる：入口から前へ UNDER_GAP+1 マスまでに、同じ向きの出口があればつなぐ
+// （同じ向きの入口が先にあれば、そこで終わり）。間のマスは見えないベルトで、素材は持ち越す
+function linkTunnels(world) {
+  const tubes = [];
+  for (const e of world.ents) if (e.kind === 'under') e.partner = null;
+  for (const e of world.ents) {
+    if (e.kind !== 'under' || e.role !== 'in') continue;
+    let out = null, k = 1;
+    for (; k <= UNDER_GAP + 1; k++) {
+      const t = entAt(world, e.x + DX[e.dir] * k, e.y + DY[e.dir] * k);
+      if (t && t.kind === 'under' && t.dir === e.dir) { if (t.role === 'out' && !t.partner) out = t; break; }
+    }
+    if (!out) { e.tube = []; continue; }
+    e.partner = out; out.partner = e;
+    const n = k - 1;
+    const old = e.tube.length === n ? e.tube : [];
+    e.tube = [];
+    for (let i = 0; i < n; i++) {
+      e.tube.push({
+        id: 'tube', kind: 'belt', virtual: true, x: e.x + DX[e.dir] * (i + 1), y: e.y + DY[e.dir] * (i + 1), w: 1, h: 1,
+        dir: e.dir, item: old[i] ? old[i].item : null, outs: [], feeders: [], rr: 0, lastFrom: null,
+      });
+    }
+    const chain = [e, ...e.tube, out];
+    for (let i = 0; i < chain.length - 1; i++) { chain[i].outs.push(chain[i + 1]); chain[i + 1].feeders.push(chain[i]); }
+    tubes.push(...e.tube);
+  }
+  return tubes;
+}
+
+// 魔力：どの魔力炉がどの機械に届くか（機械の全部のマスが範囲に入っていること）
+function linkMana(world) {
+  const B = world.data.buildings;
+  world.manaFurnaces = world.ents.filter((e) => e.kind === 'emitter' && B[e.id].fuelPerMin);
+  world.consumers = world.leyline ? [] : world.ents.filter((e) => B[e.id].mana && (e.kind === 'machine' || e.kind === 'emitter'));
+  for (const f of world.manaFurnaces) f.covers = [];
+  for (const e of world.ents) {
+    e.needsMana = !world.leyline && !!B[e.id].mana;
+    e.suppliers = [];
+    e.pn = 1; e.pd = 1;
+    if (e.kind === 'emitter' && !e.needsMana) e.on = true;
+  }
+  for (const c of world.consumers) {
+    for (const f of world.manaFurnaces) {
+      if (inside(reach(world, f), c)) { c.suppliers.push(f); f.covers.push(c); }
+    }
+  }
+  assignPower(world);
+}
+
+// 機械ごとの速さ（pn/pd）。届いている魔力炉のうち、いちばん余裕のある炉で決める
+function assignPower(world) {
+  let changed = false;
+  for (const c of world.consumers) {
+    let n = 0, d = 1;
+    for (const f of c.suppliers) {
+      if (!f.burning) continue;
+      const load = f.covers.length, nn = Math.min(world.data.buildings[f.id].powers, load);
+      if (nn * d > n * load) { n = nn; d = load; }
+    }
+    c.pn = n; c.pd = d;
+    if (c.kind === 'emitter') {
+      const on = n > 0;
+      if (on !== c.on) { c.on = on; changed = true; }
+    }
+  }
+  return changed;
+}
+
+// 魔力炉が燃料を燃やす（範囲に魔力の要る機械があるときだけ）
+function powerTick(world) {
+  if (world.leyline || !world.manaFurnaces.length) return;
+  for (const f of world.manaFurnaces) {
+    if (f.burn === 0 && f.fuel > 0 && f.covers.length) { f.fuel--; f.burn = Math.round((60 * TPS) / world.data.buildings[f.id].fuelPerMin); }
+    f.burning = f.burn > 0;
+    if (f.burn > 0) f.burn--;
+  }
+  if (assignPower(world)) computeFields(world);
+}
+
+const isHolder = (e) => e.kind === 'belt' || e.kind === 'splitter' || e.kind === 'under';
+
+export function rebuild(world) {
+  const { ents } = world;
   for (const e of ents) {
-    if (e.kind === 'belt' || e.kind === 'source') addOut(world, e, e.x, e.y, e.dir);
+    e.outs = []; e.feeders = [];
+    if (e.kind === 'emitter') e.fuelIn = !!world.data.buildings[e.id].fuelPerMin;
+  }
+  linkMana(world);
+  computeFields(world);
+  const tubes = linkTunnels(world);
+  for (const e of ents) {
+    if (e.kind === 'belt' || e.kind === 'source' || (e.kind === 'under' && e.role === 'out')) addOut(world, e, e.x, e.y, e.dir);
     else if (e.kind === 'splitter') {
       for (const d of [e.dir, (e.dir + 3) & 3, (e.dir + 1) & 3]) addOut(world, e, e.x, e.y, d);
     } else if (e.kind === 'machine') {
@@ -168,13 +279,13 @@ export function rebuild(world) {
     if (e.lastFrom && !ents.includes(e.lastFrom)) e.lastFrom = null;
   }
   // 下流から先に動かす順番（詰まっていない列がまとめて進むように）
-  const holders = ents.filter((e) => e.kind === 'belt' || e.kind === 'splitter');
+  const holders = [...ents.filter(isHolder), ...tubes];
   const seen = new Set();
   const order = [];
   const visit = (e) => {
     if (seen.has(e)) return;
     seen.add(e);
-    for (const t of e.outs) if (t.kind === 'belt' || t.kind === 'splitter') visit(t);
+    for (const t of e.outs) if (isHolder(t)) visit(t);
     order.push(e);
   };
   holders.forEach(visit);
@@ -186,7 +297,7 @@ export function rebuild(world) {
 }
 
 function ready(f) {
-  if (f.kind === 'belt' || f.kind === 'splitter') return !!f.item && f.item.p >= BELT_TICKS;
+  if (isHolder(f)) return !!f.item && f.item.p >= BELT_TICKS;
   if (f.kind === 'source') return !!f.item && f.cool <= 0 && (!f.imported || f.credit >= 1);
   if (f.kind === 'machine') return Object.values(f.outbuf).some((n) => n > 0);
   return false;
@@ -207,6 +318,7 @@ function push(world, from, target, item) {
   switch (target.kind) {
     case 'belt':
     case 'splitter':
+    case 'under':
       if (target.item) return false;
       if (target.feeders.length > 1 && !myTurn(target, from)) return false;
       item.p = 0;
@@ -222,6 +334,10 @@ function push(world, from, target, item) {
       target.inbuf[item.t] = have + 1;
       return true;
     }
+    case 'emitter':
+      if (!target.fuelIn || item.t !== 'fuel' || target.fuel >= FUEL_CAP) return false;
+      target.fuel++;
+      return true;
     case 'sink':
       target.count[item.t] = (target.count[item.t] || 0) + 1;
       world.delivered[item.t] = (world.delivered[item.t] || 0) + 1;
@@ -243,6 +359,7 @@ function tryOut(world, e, item) {
 }
 
 function applyFields(world, h) {
+  if (h.virtual) return; // 下をくぐっている間は範囲が効かない
   const it = h.item;
   for (const rule of world.data.fieldRules) {
     if (rule.from !== it.t || !fieldActive(world, rule.field, h.x, h.y)) continue;
@@ -258,12 +375,20 @@ function stepMachine(world, m) {
   for (const t in m.outbuf) {
     if (m.outbuf[t] > 0 && tryOut(world, m, { t, p: 0, ex: 0 })) { m.outbuf[t]--; break; }
   }
+  const powered = !m.needsMana || m.pn > 0;
+  m.slow = m.needsMana && powered && m.pn < m.pd;
   if (m.left > 0) {
-    m.left--;
-    if (m.left === 0) for (const t in r.out) m.outbuf[t] = (m.outbuf[t] || 0) + r.out[t];
+    if (!powered) { m.status = 'no-mana'; return; }
+    let go = true;
+    if (m.slow) { m.acc += m.pn; if (m.acc >= m.pd) m.acc -= m.pd; else go = false; }
+    if (go) {
+      m.left--;
+      if (m.left === 0) for (const t in r.out) m.outbuf[t] = (m.outbuf[t] || 0) + r.out[t];
+    }
   }
   if (m.left > 0) { m.status = 'working'; return; }
   if (r.field && !machineInField(world, m, r.field)) { m.status = 'no-field'; return; }
+  if (!powered) { m.status = 'no-mana'; return; }
   for (const t in r.out) if ((m.outbuf[t] || 0) >= r.out[t] * 2) { m.status = 'blocked'; return; }
   for (const t in r.in) if ((m.inbuf[t] || 0) < r.in[t]) { m.status = 'waiting'; return; }
   for (const t in r.in) m.inbuf[t] -= r.in[t];
@@ -275,6 +400,7 @@ export function step(world) {
   if (world.dirty) rebuild(world);
   world.tick++;
   world.tickOut = {};
+  powerTick(world);
   for (const h of world.holders) {
     if (!h.item) continue;
     if (h.item.p < BELT_TICKS) h.item.p++;
@@ -317,6 +443,7 @@ export function serialize(world) {
       const o = { id: e.id, x: e.x, y: e.y, dir: e.dir };
       if (e.fixed) o.fixed = true;
       if (e.kind === 'machine') o.recipe = e.recipe;
+      if (e.kind === 'under') o.role = e.role;
       if (e.kind === 'source') { o.item = e.item; if (e.interval !== BELT_TICKS) o.interval = e.interval; if (e.imported) o.imported = true; }
       return o;
     }),
@@ -334,6 +461,7 @@ export function snapshot(world) {
   return JSON.stringify({
     tick: world.tick,
     delivered: world.delivered,
-    ents: world.ents.map((e) => [e.id, e.x, e.y, e.item ?? null, e.inbuf ?? null, e.outbuf ?? null, e.left ?? null]),
+    ents: world.ents.map((e) => [e.id, e.x, e.y, e.item ?? null, e.inbuf ?? null, e.outbuf ?? null, e.left ?? null, e.fuel ?? null,
+      (e.tube || []).map((c) => c.item)]),
   });
 }

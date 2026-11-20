@@ -4,7 +4,7 @@ import {
   createGame, step as stepGame, layoutChanged, resetDistrict, unlocked, perMin, startCleanup,
   districtDef, save,
 } from '../core/game.js';
-import { place, remove, entAt, rate, TPS } from '../core/sim.js';
+import { place, remove, entAt, rate, rebuild, TPS, DX, DY, UNDER_GAP, FUEL_CAP } from '../core/sim.js';
 import { draw, CELL } from './draw.js';
 import { drawItem } from './sprites.js';
 
@@ -61,7 +61,7 @@ function renderMap() {
       const card = document.createElement('div');
       card.className = `card ${st}`;
       let body = '';
-      if (st === 'soon') body = '<p class="sub">準備中（フェーズ4以降）</p>';
+      if (st === 'soon') body = '<p class="sub">準備中（フェーズ5以降）</p>';
       else if (st === 'locked') body = '<p class="sub">まだ開いていない</p>';
       else {
         const n = game.state.done[id] || 0;
@@ -154,7 +154,8 @@ function renderPalette() {
     const b = buildings[id];
     const el = document.createElement('button');
     const lim = def.limits[id] != null ? `　${countOf(id)}/${def.limits[id]}` : '';
-    el.innerHTML = `<span>${i + 1}. ${b.name}</span><small>${b.w}×${b.h}${lim}</small>`;
+    const mana = b.mana && def.leyline === false ? '・魔力' : '';
+    el.innerHTML = `<span>${i + 1}. ${b.name}</span><small>${b.kind === 'under' ? '入口と出口' : `${b.w}×${b.h}`}${mana}${lim}</small>`;
     el.className = ui.tool === id ? 'on' : '';
     el.disabled = overLimit(id);
     el.onclick = () => { ui.tool = ui.tool === id ? null : id; renderPalette(); };
@@ -265,6 +266,16 @@ function dragTo(t) {
 }
 function removeAt(t) { if (remove(world, t.x, t.y)) changed(); }
 
+// 下をくぐるベルトを置くと、入口か出口か：後ろ（UNDER_GAP+1 マス以内）に出口のない同じ向きの入口があれば出口
+function underRole(x, y, dir) {
+  if (world.dirty) rebuild(world);
+  for (let k = 1; k <= UNDER_GAP + 1; k++) {
+    const t = entAt(world, x - DX[dir] * k, y - DY[dir] * k);
+    if (t && t.kind === 'under' && t.dir === dir) return t.role === 'in' && !t.partner ? 'out' : 'in';
+  }
+  return 'in';
+}
+
 canvas.addEventListener('contextmenu', (ev) => ev.preventDefault());
 canvas.addEventListener('mousedown', (ev) => {
   const t = tileAt(ev);
@@ -279,7 +290,7 @@ canvas.addEventListener('mousedown', (ev) => {
     drag = { x: t.x, y: t.y };
     putBelt(t.x, t.y, ui.dir);
     changed();
-  } else if (!overLimit(ui.tool) && place(world, ui.tool, t.x, t.y, ui.dir)) {
+  } else if (!overLimit(ui.tool) && place(world, ui.tool, t.x, t.y, ui.dir, ui.tool === 'under' ? { role: underRole(t.x, t.y, ui.dir) } : {})) {
     changed();
     if (overLimit(ui.tool)) { ui.tool = null; renderPalette(); }
   }
@@ -340,7 +351,30 @@ $('openall').onclick = () => {
   route();
 };
 
-const STATUS = { working: '動いている', waiting: '材料待ち', blocked: '出口が詰まっている', 'no-field': '範囲の外', 'no-recipe': 'レシピなし' };
+const STATUS = {
+  working: '動いている', waiting: '材料待ち', blocked: '出口が詰まっている', 'no-field': '範囲の外', 'no-recipe': 'レシピなし',
+  'no-mana': '魔力が届いていない（魔力炉の範囲に全部のマスを入れて、燃料を入れる）',
+};
+const FIELD_TEXT = {
+  heat: '周りに熱の範囲を作る。熱の中を3マス進んだ鉱石は溶け、金属板は赤熱する。ガラスの素は5マスでガラスになる',
+  cold: '周りに冷気の範囲を作る。熱と重なったマスは打ち消し合う',
+};
+function emitterInfo(e) {
+  const b = buildings[e.id];
+  if (b.field !== 'mana') {
+    let s = `：${FIELD_TEXT[b.field]}`;
+    if (e.needsMana) s += e.on ? '｜魔力が届いている' : '｜魔力が届いていないので止まっている';
+    return s;
+  }
+  if (world.leyline) return '：この区画は地脈があるので、魔力は要らない';
+  const n = e.covers?.length ?? 0;
+  return `：燃料を毎分${b.fuelPerMin}燃やし、範囲の魔力が要る機械${b.powers}台まで動かす｜燃料 ${e.fuel}/${FUEL_CAP}・${e.burning ? '燃えている' : '止まっている'}｜範囲の機械 ${n}台${n > b.powers ? `（多いので全部 ${b.powers}/${n} の速さ）` : ''}`;
+}
+function underInfo(e) {
+  const side = e.role === 'in' ? '（入口）' : '（出口）';
+  if (e.partner) return `${side}：間の${Math.abs(e.partner.x - e.x) + Math.abs(e.partner.y - e.y) - 1}マスを下でつなぐ。くぐっている間は範囲が効かない`;
+  return e.role === 'in' ? `${side}：出口がない。前へ${UNDER_GAP + 1}マス以内に、同じ向きで出口を置く` : `${side}：入口がない`;
+}
 function updateInfo() {
   const t = ui.hover;
   const e = t && entAt(world, t.x, t.y);
@@ -351,8 +385,10 @@ function updateInfo() {
       const r = content.recipes[e.recipe];
       const io = (o) => Object.entries(o).map(([k, n]) => `${itemName(k)}${n > 1 ? n : ''}`).join('＋');
       s += `：${io(r.in)} → ${io(r.out)}（毎分${(600 / r.ticks) * Object.values(r.out)[0]}個）｜${STATUS[e.status]}`;
+      if (e.slow && e.status === 'working') s += `（魔力不足で ${e.pn}/${e.pd} の速さ）`;
     } else if (e.kind === 'source') s += e.imported ? `：${itemName(e.item)}（前の区画から。倉庫に入る量まで）` : `：${itemName(e.item)}（毎分120個まで）`;
-    else if (e.kind === 'emitter') s += '：周りに熱の範囲を作る。熱の中を3マス進んだ鉱石は溶け、金属板は赤熱する';
+    else if (e.kind === 'emitter') s += emitterInfo(e);
+    else if (e.kind === 'under') s += underInfo(e);
     else if (e.item) s += `：${itemName(e.item.t)}`;
   } else if (t && world.blocked[t.y * world.w + t.x] === 2) s = '瓦礫：右の「瓦礫」から片づけると置けるようになる';
   $('info').textContent = s;
@@ -383,6 +419,7 @@ function frame(now) {
     const cleanupTiles = c && c.district === ui.district ? def.rubble.find((r) => r.id === c.patch)?.tiles : null;
     draw(canvas.getContext('2d'), world, {
       tool: ui.tool, dir: ui.dir, hover: ui.hover, alpha: ui.alpha, overLimit, cleanupTiles,
+      underRole: ui.tool === 'under' && ui.hover ? underRole(ui.hover.x, ui.hover.y, ui.dir) : null,
       portLabel: () => '受取',
     });
     updateInfo();

@@ -52,7 +52,7 @@ function buildWorld(game, id) {
   const def = districtDef(game, id);
   if (!def) return null;
   const world = createWorld({
-    w: def.w, h: def.h, blocked: def.walls,
+    w: def.w, h: def.h, blocked: def.walls, leyline: def.leyline !== false,
     rubble: rubbleLeft(game, def).flatMap((r) => r.tiles),
   }, game.content);
   for (const f of def.fixed) place(world, f.id, f.x, f.y, f.dir, { ...f, fixed: true });
