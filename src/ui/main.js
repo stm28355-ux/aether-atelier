@@ -3,7 +3,9 @@ import content from '../data/content.js';
 import {
   createGame, step as stepGame, layoutChanged, resetDistrict, unlocked, perMin,
   districtDef, save, recipesFor, goals, clearedBy,
+  setLayout, pasteCheck, pasteInto, districtBlueprint, replaceWithBlueprint,
 } from '../core/game.js';
+import { copyArea, rotate as rotateBp, encode, decode } from '../core/blueprint.js';
 import {
   place, remove, entAt, rate, rebuild, setRecipe, backRate, TPS, DX, DY, UNDER_GAP, FUEL_CAP, SHAKE_RADIUS, BELT_TICKS,
 } from '../core/sim.js';
@@ -23,7 +25,8 @@ const persist = () => {
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(save(game))); } catch { /* 保存できなくても遊べる */ }
 };
 
-const ui = { screen: 'map', district: null, tool: null, tab: 'move', dir: 0, hover: null, alpha: 0, paused: false, speed: 1, recipe: {}, filter: null, book: 'items' };
+const ui = { screen: 'map', district: null, tool: null, tab: 'move', dir: 0, hover: null, alpha: 0, paused: false, speed: 1, recipe: {}, filter: null, book: 'items',
+  sel: null, selecting: false, clip: null, pasting: false, pasteState: null };
 const canvas = $('board');
 
 // ---- 画面の切り替え（#/map, #/book, #/d/区画） ----
@@ -221,7 +224,9 @@ function openDistrict(id) {
   // 真ん中の列は盤面の幅に固定する（説明文の長さで列の幅が変わると、盤面がずれてカーソルの下のマスが変わる）
   $('center').style.width = `${def.w * CELL + 2}px`;
   $('intro').textContent = def.intro;
-  renderPalette(); renderRequests(); renderRubble();
+  ui.pasting = false; ui.selecting = false; clearSel(); holding = false;
+  lastSnap = snap();
+  renderPalette(); renderRequests(); renderRubble(); renderEditBar();
 }
 
 const countOf = (id) => world.ents.filter((e) => e.id === id).length;
@@ -232,6 +237,53 @@ function changed() {
   layoutChanged(game, ui.district);
   persist();
   renderPalette();
+  if (!holding) commit(); // ドラッグ中は、マウスを離したときにまとめて1回分として覚える
+}
+
+// ---- 元に戻す・やり直す ----
+// 置き方が変わるたびに、前の置き方（燃料や運んでいる物は含めない）を区画ごとに覚える
+const UNDO_MAX = 80;
+const undoStacks = {};
+const stacks = () => (undoStacks[ui.district] ||= { undo: [], redo: [] });
+let lastSnap = null; // 最後に覚えた置き方
+let holding = false; // マウスを押している間
+function snap() {
+  return JSON.stringify(world.ents.filter((e) => !e.fixed).map((e) => {
+    const o = { id: e.id, x: e.x, y: e.y, dir: e.dir };
+    if (e.recipe) o.recipe = e.recipe;
+    if (e.role) o.role = e.role;
+    if (e.filter) o.filter = e.filter;
+    return o;
+  }).sort((a, b) => a.y - b.y || a.x - b.x));
+}
+function pushUndo(s) {
+  const st = stacks();
+  st.undo.push(s);
+  if (st.undo.length > UNDO_MAX) st.undo.shift();
+  st.redo.length = 0;
+}
+function commit() {
+  const now = snap();
+  if (lastSnap !== null && now !== lastSnap) pushUndo(lastSnap);
+  lastSnap = now;
+  renderEditBar();
+}
+function restore(s) {
+  setLayout(game, ui.district, JSON.parse(s)); // 同じ物は置き直さない（燃料や運んでいる物はそのまま）
+  lastSnap = snap();
+  persist(); renderPalette(); renderEditBar();
+}
+function undo() {
+  const st = stacks();
+  if (!st.undo.length) return;
+  st.redo.push(snap());
+  restore(st.undo.pop());
+}
+function redo() {
+  const st = stacks();
+  if (!st.redo.length) return;
+  st.undo.push(snap());
+  restore(st.redo.pop());
 }
 
 const TOOL_NOTE = {
@@ -322,7 +374,7 @@ function renderPalette() {
     el.innerHTML = `<span class="pk">${i + 1}</span><span class="pn">${b.name}</span><small>${tags.join('・')}</small><span class="mk">${makesHtml(id)}</span>`;
     el.className = ui.tool === id ? 'on' : '';
     el.disabled = overLimit(id);
-    el.onclick = () => { ui.tool = ui.tool === id ? null : id; renderPalette(); };
+    el.onclick = () => { ui.tool = ui.tool === id ? null : id; dropEdit(); renderPalette(); };
     return el;
   }));
   paintIcons();
@@ -501,16 +553,188 @@ function underRole(x, y, dir) {
   return 'in';
 }
 
+// ---- 範囲を選ぶ・図面を貼る・スポイト ----
+// 範囲は Shift＋ドラッグか「範囲を選ぶ」で選ぶ。コピー・切り取りした図面は持ったまま何度でも貼れる（R で回す）
+const selRect = (s) => ({ ax: Math.min(s.x0, s.x1), ay: Math.min(s.y0, s.y1), bx: Math.max(s.x0, s.x1), by: Math.max(s.y0, s.y1) });
+const clampT = (t) => ({ x: Math.max(0, Math.min(world.w - 1, t.x)), y: Math.max(0, Math.min(world.h - 1, t.y)) });
+// 範囲に少しでもかかっている物（消すとき）
+function entsTouching(s) {
+  const r = selRect(s);
+  return world.ents.filter((e) => !e.fixed && e.x <= r.bx && e.x + e.w - 1 >= r.ax && e.y <= r.by && e.y + e.h - 1 >= r.ay);
+}
+function clearSel() { ui.sel = null; $('selmenu').classList.remove('show'); }
+// 持っている物・図面・範囲選びをやめる
+function dropEdit() { ui.pasting = false; ui.selecting = false; clearSel(); renderEditBar(); }
+
+function copySel() {
+  const r = selRect(ui.sel);
+  const bp = copyArea(world, r.ax, r.ay, r.bx, r.by, { d: ui.district });
+  clearSel();
+  if (!bp) { toast('範囲の中に、まるごと入っている物がない'); renderEditBar(); return null; }
+  ui.clip = bp;
+  startPaste();
+  return bp;
+}
+function cutSel() {
+  const bp = copySel();
+  if (!bp) return;
+  for (const e of bp.ents) remove(world, bp.x + e.x, bp.y + e.y);
+  changed();
+}
+function deleteSel() {
+  const list = entsTouching(ui.sel);
+  clearSel();
+  for (const e of list) remove(world, e.x, e.y);
+  if (list.length) changed();
+  renderEditBar();
+}
+function openSelMenu(ev) {
+  const r = selRect(ui.sel);
+  const n = entsTouching(ui.sel).length;
+  const box = $('selmenu');
+  box.innerHTML = `<div class="pk-t">選んだ範囲（${r.bx - r.ax + 1}×${r.by - r.ay + 1}マス、${n}個）</div>
+    <button data-sel="copy">コピー<small>C</small></button>
+    <button data-sel="cut">切り取り<small>X</small></button>
+    <button data-sel="del">消す<small>Delete</small></button>
+    <button data-sel="text">図面の文字列にする</button>
+    <button data-sel="cancel">やめる<small>Esc</small></button>`;
+  box.style.left = `${Math.min(ev.clientX + 10, window.innerWidth - 200)}px`;
+  box.style.top = `${Math.min(ev.clientY + 10, window.innerHeight - 230)}px`;
+  box.classList.add('show');
+  for (const b of box.querySelectorAll('[data-sel]')) {
+    b.onclick = () => {
+      const a = b.dataset.sel;
+      if (a === 'copy') copySel();
+      else if (a === 'cut') cutSel();
+      else if (a === 'del') deleteSel();
+      else if (a === 'text') { const bp = copySel(); if (bp) openBp(encode(bp), `選んだ範囲の図面（${bp.ents.length}個）。今は持っているので、クリックで貼れる`); }
+      else { clearSel(); renderEditBar(); }
+    };
+  }
+}
+
+function startPaste() {
+  if (!ui.clip) return;
+  ui.pasting = true; ui.tool = null; ui.selecting = false;
+  clearSel(); renderPalette(); renderEditBar();
+}
+// 図面はカーソルのマスを真ん中にして貼る
+const pasteOrigin = () => (ui.hover && ui.clip
+  ? { ox: ui.hover.x - Math.floor((ui.clip.w - 1) / 2), oy: ui.hover.y - Math.floor((ui.clip.h - 1) / 2) } : null);
+function pasteHere() {
+  const o = pasteOrigin();
+  if (!o) return;
+  const r = pasteCheck(game, ui.district, ui.clip, o.ox, o.oy);
+  if (!r.ok) { toast(`貼れない：${r.reason}`); return; }
+  pasteInto(game, ui.district, ui.clip, o.ox, o.oy);
+  changed();
+}
+
+// スポイト：カーソルの下の物を、同じ向き・同じレシピで持つ
+function pipette() {
+  const e = ui.hover && entAt(world, ui.hover.x, ui.hover.y);
+  if (!e || e.fixed || !placeable().includes(e.id)) return;
+  ui.pasting = false; ui.selecting = false; clearSel();
+  if (overLimit(e.id)) { toast(`${buildings[e.id].name}はこの区画に${def.limits[e.id]}台まで`); ui.tool = null; }
+  else ui.tool = e.id;
+  ui.dir = e.dir;
+  if (e.recipe) ui.recipe[e.id] = e.recipe;
+  if (e.kind === 'sorter') ui.filter = e.filter;
+  const tab = TABS.find((g) => g.has(buildings[e.id]));
+  if (tab) ui.tab = tab.id;
+  renderPalette(); renderEditBar();
+}
+
+function renderEditBar() {
+  if (!ui.district) return;
+  const st = stacks();
+  $('btn-select').classList.toggle('on', ui.selecting);
+  $('btn-paste').classList.toggle('on', ui.pasting);
+  $('btn-paste').disabled = !ui.clip;
+  $('btn-undo').disabled = !st.undo.length;
+  $('btn-redo').disabled = !st.redo.length;
+  $('holding').textContent = ui.pasting ? '図面を持っている：クリックで貼る・R で回す・右クリックで手放す'
+    : ui.selecting ? 'ドラッグで範囲を選ぶ（右クリックか Esc でやめる）' : '';
+}
+$('btn-select').onclick = () => {
+  const on = !ui.selecting;
+  dropEdit();
+  ui.selecting = on;
+  if (on) { ui.tool = null; renderPalette(); }
+  renderEditBar();
+};
+$('btn-paste').onclick = () => { if (ui.pasting) dropEdit(); else startPaste(); };
+$('btn-undo').onclick = undo;
+$('btn-redo').onclick = redo;
+$('btn-bp').onclick = () => openBp();
+
+// ---- 図面の文字列 ----
+const bpMsg = (s) => { $('bp-msg').textContent = s; };
+function openBp(text = '', msg = '') {
+  $('bp-text').value = text;
+  bpMsg(msg);
+  $('bp-clip').disabled = !ui.clip;
+  $('bpbox').classList.add('show');
+  if (text) $('bp-text').select();
+}
+function closeBp() { $('bpbox').classList.remove('show'); }
+$('bp-district').onclick = () => {
+  const bp = districtBlueprint(game, ui.district);
+  if (!bp) { bpMsg('この区画には、まだ何も置いていない'); return; }
+  $('bp-text').value = encode(bp);
+  $('bp-text').select();
+  bpMsg(`${def.name}の図面（${bp.ents.length}個）。この区画で読み込むと、配置をまるごと置き換えられる`);
+};
+$('bp-clip').onclick = () => {
+  if (!ui.clip) return;
+  $('bp-text').value = encode(ui.clip);
+  $('bp-text').select();
+  bpMsg(`持っている図面（${ui.clip.ents.length}個）`);
+};
+$('bp-copy').onclick = async () => {
+  const t = $('bp-text').value.trim();
+  if (!t) return;
+  try { await navigator.clipboard.writeText(t); bpMsg('文字列をコピーした'); } catch { $('bp-text').select(); bpMsg('コピーできなかった。選んである文字列を Ctrl+C でコピーする'); }
+};
+$('bp-load').onclick = () => {
+  const r = decode($('bp-text').value, content);
+  if (r.error) { bpMsg(r.error); return; }
+  const bp = r.bp;
+  if (bp.full && bp.d === ui.district) {
+    if (!confirm('この区画の配置を、図面でまるごと置き換えます。よいですか？（「元に戻す」で戻せる）')) return;
+    const res = replaceWithBlueprint(game, ui.district, bp);
+    if (!res.ok) { bpMsg(`置き換えられない：${res.reason}`); return; }
+    changed(); closeBp(); toast('図面で区画を置き換えた');
+    return;
+  }
+  ui.clip = bp; startPaste(); closeBp();
+  toast(bp.full ? `${districtDef(game, bp.d)?.name ?? 'ほかの区画'}の図面を持った。クリックで貼る（R で回す）` : '図面を持った。クリックで貼る（R で回す）');
+};
+$('bp-close').onclick = closeBp;
+
+// ---- マウス ----
 canvas.addEventListener('contextmenu', (ev) => ev.preventDefault());
 canvas.addEventListener('mousedown', (ev) => {
   const t = tileAt(ev);
+  if (ev.button === 1) { ev.preventDefault(); pipette(); return; }
   if (ev.button === 2) {
+    if (ui.pasting || ui.sel || ui.selecting) { dropEdit(); return; }
+    holding = true;
     const e = entAt(world, t.x, t.y);
     if (e && !e.fixed) { removeAt(t); drag = { erase: true }; }
     else if (ui.tool) { ui.tool = null; renderPalette(); } else drag = { erase: true };
     return;
   }
   if (ev.button !== 0) return;
+  if (ev.shiftKey || ui.selecting) { // 範囲を選び始める
+    const c = clampT(t);
+    ui.sel = { x0: c.x, y0: c.y, x1: c.x, y1: c.y, drag: true };
+    $('selmenu').classList.remove('show');
+    return;
+  }
+  if (ui.sel) { clearSel(); renderEditBar(); }
+  if (ui.pasting) { pasteHere(); return; }
+  holding = true;
   // 何も持っていないか、持っている物と同じ設備をクリックしたら、レシピ（選り分けは素材）を選ぶ
   const here = entAt(world, t.x, t.y);
   if (!ui.tool || (here && here.id === ui.tool && ui.tool !== 'belt')) {
@@ -537,14 +761,24 @@ canvas.addEventListener('mousedown', (ev) => {
 canvas.addEventListener('mousemove', (ev) => {
   const t = tileAt(ev);
   ui.hover = t;
+  if (ui.sel?.drag) { const c = clampT(t); ui.sel.x1 = c.x; ui.sel.y1 = c.y; return; }
   if (!drag) return;
   if (drag.erase) removeAt(t);
   else if (t.x >= 0 && t.y >= 0 && t.x < world.w && t.y < world.h) dragTo(t);
 });
-window.addEventListener('mouseup', () => { drag = null; });
+window.addEventListener('mouseup', (ev) => {
+  drag = null;
+  if (ui.sel?.drag) { ui.sel.drag = false; ui.selecting = false; openSelMenu(ev); renderEditBar(); }
+  if (holding) { holding = false; commit(); }
+});
+// 範囲の小さな窓の外をクリックしたら、範囲をやめる
+window.addEventListener('mousedown', (ev) => {
+  if (ui.sel && !ui.sel.drag && !$('selmenu').contains(ev.target) && ev.target !== canvas) { clearSel(); renderEditBar(); }
+}, true);
 canvas.addEventListener('mouseleave', () => { ui.hover = null; });
 
 function rotate(stepN = 1) {
+  if (ui.pasting && ui.clip) { ui.clip = rotateBp(ui.clip, content, stepN); return; }
   const e = ui.hover && entAt(world, ui.hover.x, ui.hover.y);
   if (!ui.tool && e && !e.fixed) { e.dir = (e.dir + stepN) & 3; world.dirty = true; changed(); return; }
   ui.dir = (ui.dir + stepN) & 3;
@@ -557,15 +791,29 @@ function setPaused(p) {
   $('pause').textContent = p ? '再開' : '一時停止';
 }
 window.addEventListener('keydown', (ev) => {
+  if (ev.target.closest?.('textarea, input')) return; // 図面の文字列を書いているとき
+  if ($('bpbox').classList.contains('show')) { if (ev.key === 'Escape') closeBp(); return; }
   if (ev.key === ' ') { ev.preventDefault(); setPaused(!ui.paused); return; }
   if (ui.screen !== 'district') return;
-  if (ev.key === 'r' || ev.key === 'R') rotate();
-  else if (ev.key === 'q' || ev.key === 'Q' || ev.key === 'Escape') { closePicker(); ui.tool = null; renderPalette(); }
-  else if (ev.key === 'Delete' && ui.hover) removeAt(ui.hover);
-  else if (ev.key === 'Tab') { ev.preventDefault(); switchTab(ev.shiftKey ? -1 : 1); }
-  else if (/^[1-9]$/.test(ev.key)) {
-    const id = inTab(ui.tab)[Number(ev.key) - 1];
-    if (id && !overLimit(id)) { ui.tool = id; renderPalette(); }
+  const k = ev.key.length === 1 ? ev.key.toLowerCase() : ev.key;
+  const ctrl = ev.ctrlKey || ev.metaKey;
+  if (ctrl && k === 'z') { ev.preventDefault(); if (ev.shiftKey) redo(); else undo(); return; }
+  if (ctrl && k === 'y') { ev.preventDefault(); redo(); return; }
+  if (ctrl && k === 'v') { ev.preventDefault(); startPaste(); return; }
+  if (ui.sel && !ui.sel.drag) {
+    if (k === 'c') { ev.preventDefault(); copySel(); return; }
+    if (k === 'x') { ev.preventDefault(); cutSel(); return; }
+    if (k === 'Delete' || k === 'Backspace') { ev.preventDefault(); deleteSel(); return; }
+  }
+  if (ctrl) return; // ほかの Ctrl の組み合わせはブラウザに任せる
+  if (k === 'r') rotate();
+  else if (k === 'e') pipette();
+  else if (k === 'q' || k === 'Escape') { closePicker(); dropEdit(); ui.tool = null; renderPalette(); }
+  else if (k === 'Delete' && ui.hover) removeAt(ui.hover);
+  else if (k === 'Tab') { ev.preventDefault(); switchTab(ev.shiftKey ? -1 : 1); }
+  else if (/^[1-9]$/.test(k)) {
+    const id = inTab(ui.tab)[Number(k) - 1];
+    if (id && !overLimit(id)) { ui.tool = id; dropEdit(); renderPalette(); }
   }
 });
 $('pause').onclick = () => setPaused(!ui.paused);
@@ -576,10 +824,12 @@ for (const b of document.querySelectorAll('[data-speed]')) {
   };
 }
 $('reset').onclick = () => {
-  if (!confirm('この区画に置いた物を全部消します。よいですか？（依頼の達成と片づけた瓦礫は残ります）')) return;
+  if (!confirm('この区画に置いた物を全部消します。よいですか？（依頼の達成と片づいた瓦礫は残ります。「元に戻す」で戻せる）')) return;
+  const before = lastSnap;
   resetDistrict(game, ui.district);
   persist();
   openDistrict(ui.district);
+  if (before && before !== lastSnap) { pushUndo(before); renderEditBar(); }
 };
 $('openall').onclick = () => {
   for (const d of content.districts) {
@@ -617,7 +867,10 @@ function updateInfo() {
   const t = ui.hover;
   const e = t && entAt(world, t.x, t.y);
   let s = '', name = '';
-  if (e) {
+  if (ui.pasting && ui.pasteState && t) { // 図面を持っているときは、貼れるかを出す
+    name = '図面';
+    s = ui.pasteState.ok ? `：${ui.clip.ents.length}個。クリックで貼る・R で回す・右クリックで手放す` : `：ここには貼れない（${ui.pasteState.reason}）`;
+  } else if (e) {
     name = buildings[e.id].name;
     if (e.kind === 'machine') {
       const r = content.recipes[e.recipe];
@@ -662,7 +915,11 @@ function frame(now) {
   }
   ui.alpha = ui.paused ? 0 : acc;
   if (ui.screen === 'district') {
+    const po = ui.pasting ? pasteOrigin() : null;
+    ui.pasteState = po ? pasteCheck(game, ui.district, ui.clip, po.ox, po.oy) : null;
     draw(canvas.getContext('2d'), world, {
+      sel: ui.sel ? selRect(ui.sel) : null,
+      paste: po ? { bp: ui.clip, ox: po.ox, oy: po.oy, bad: ui.pasteState.bad, ok: ui.pasteState.ok } : null,
       tool: ui.tool, dir: ui.dir, hover: ui.hover, alpha: ui.alpha, overLimit,
       showShake: world.ents.some((e) => buildings[e.id].fragile) || !!(ui.tool && (buildings[ui.tool].fragile || buildings[ui.tool].shake)),
       underRole: ui.tool === 'under' && ui.hover ? underRole(ui.hover.x, ui.hover.y, ui.dir) : null,

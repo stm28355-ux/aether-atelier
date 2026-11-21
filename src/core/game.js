@@ -10,6 +10,7 @@
 import {
   createWorld, place, remove, step as stepWorld, rate, serialize, rebuild, clearTiles, TPS,
 } from './sim.js';
+import { copyArea, checkPaste, paste } from './blueprint.js';
 
 export const PORT_CAP = 3;
 const SAVE_VERSION = 1;
@@ -75,14 +76,21 @@ function rubbleLeft(game, def) {
   return def.rubble.filter((r) => !cleared.includes(r.id));
 }
 
-function buildWorld(game, id) {
+// 何も置いていない区画（倉庫の口と、残っている瓦礫だけ）
+function emptyWorld(game, id) {
   const def = districtDef(game, id);
-  if (!def) return null;
   const world = createWorld({
     w: def.w, h: def.h, blocked: def.walls, leyline: def.leyline !== false,
     rubble: rubbleLeft(game, def).flatMap((r) => r.tiles),
   }, game.content);
   for (const f of def.fixed) place(world, f.id, f.x, f.y, f.dir, { ...f, fixed: true });
+  return world;
+}
+
+function buildWorld(game, id) {
+  const def = districtDef(game, id);
+  if (!def) return null;
+  const world = emptyWorld(game, id);
   for (const o of game.state.layouts[id] || []) place(world, o.id, o.x, o.y, o.dir, o);
   rebuild(world);
   game.worlds[id] = world;
@@ -117,6 +125,55 @@ export function setLayout(game, id, layout) {
   for (const o of want.values()) place(w, o.id, o.x, o.y, o.dir, o);
   layoutChanged(game, id);
   game.ports = null;
+}
+
+// ---- 図面（範囲のコピペ・文字列で渡す） ----
+// 区画をまるごと写した図面
+export function districtBlueprint(game, id) {
+  const w = game.worlds[id];
+  return copyArea(w, 0, 0, w.w - 1, w.h - 1, { d: id, full: true });
+}
+
+// まだ使えない設備と、台数の上限を超える設備を調べる（same：置いてある同じ物と重なる図面の番号）
+function blueprintRules(game, id, bp, world, same = new Set()) {
+  const def = districtDef(game, id);
+  const allowed = new Set(unlocked(game));
+  const locked = [...new Set(bp.ents.filter((e) => !allowed.has(e.id)).map((e) => e.id))];
+  if (locked.length) return `まだ使えない設備がある（${locked.map((b) => game.content.buildings[b].name).join('・')}）`;
+  for (const [b, max] of Object.entries(def.limits || {})) {
+    const now = world.ents.filter((e) => e.id === b).length;
+    const add = bp.ents.filter((e, i) => e.id === b && !same.has(i)).length;
+    if (add && now + add > max) return `${game.content.buildings[b].name}はこの区画に${max}台まで`;
+  }
+  return null;
+}
+
+// 図面を (ox,oy) に貼れるか：{ ok, bad, same, reason }
+export function pasteCheck(game, id, bp, ox, oy) {
+  const world = game.worlds[id];
+  const r = checkPaste(world, bp, ox, oy);
+  const rule = blueprintRules(game, id, bp, world, r.same);
+  if (rule) return { ...r, ok: false, reason: rule };
+  return { ...r, reason: r.ok ? null : 'ほかの物・瓦礫・区画の外と重なる' };
+}
+
+// 図面を貼る。貼れたら true
+export function pasteInto(game, id, bp, ox, oy) {
+  if (!pasteCheck(game, id, bp, ox, oy).ok) return false;
+  paste(game.worlds[id], bp, ox, oy);
+  layoutChanged(game, id);
+  return true;
+}
+
+// 区画をまるごと写した図面で、その区画の配置を置き換える：{ ok, reason }
+export function replaceWithBlueprint(game, id, bp) {
+  if (!bp.full || bp.d !== id) return { ok: false, reason: 'この区画をまるごと写した図面ではない' };
+  const empty = emptyWorld(game, id);
+  const rule = blueprintRules(game, id, bp, empty);
+  if (rule) return { ok: false, reason: rule };
+  if (!checkPaste(empty, bp, bp.x, bp.y).ok) return { ok: false, reason: '残っている瓦礫や倉庫の口と重なる' };
+  setLayout(game, id, bp.ents.map((e) => ({ ...e, x: e.x + bp.x, y: e.y + bp.y })));
+  return { ok: true };
 }
 
 // 今使える建物：開いた区画の base と、達成した依頼の報酬

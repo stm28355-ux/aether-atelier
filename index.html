@@ -48,6 +48,14 @@
 
 <main id="screen-district" class="screen">
   <aside id="left">
+    <div id="editbar">
+      <button id="btn-select" title="Shift＋ドラッグでも選べる">範囲を選ぶ</button>
+      <button id="btn-paste" title="Ctrl+V">図面を持つ</button>
+      <button id="btn-undo" title="Ctrl+Z">元に戻す</button>
+      <button id="btn-redo" title="Ctrl+Y">やり直す</button>
+      <button id="btn-bp" class="wide">図面の文字列（書き出す・読み込む）</button>
+    </div>
+    <p id="holding" class="hint"></p>
     <h2>置く物</h2>
     <div id="palette-tabs"></div>
     <div id="palette"></div>
@@ -57,6 +65,9 @@
       <li>右クリック：壊す／持っている物を手放す</li>
       <li>R かホイール：向きを回す（置いた機械にも効く）</li>
       <li>1〜9：置く物を選ぶ　Tab：種類を切り替える</li>
+      <li>E かホイールのクリック：盤面の物を同じ向き・レシピで持つ（スポイト）</li>
+      <li>Shift＋ドラッグ：範囲を選ぶ（C コピー・X 切り取り・Delete 消す）。コピーした図面は R で回して、クリックで何度でも貼れる</li>
+      <li>Ctrl+Z：元に戻す　Ctrl+Y：やり直す</li>
       <li>Q：手放す　Space：一時停止</li>
       <li>壊す・置き直すは何度でもタダ</li>
       <li>下をくぐるベルト：入口を置き、同じ向きで前に出口を置く（間は4マスまで）</li>
@@ -86,6 +97,15 @@
 </main>
 <div id="toast"></div>
 <div id="picker"></div>
+<div id="selmenu"></div>
+<div id="bpbox"><div class="bp-box">
+  <h2>図面の文字列</h2>
+  <p class="sub">配置を文字列にして、メモに残したり人に渡したりできる。もらった文字列を貼って「読み込む」と、図面を持って好きな場所に貼れる。同じ区画をまるごと写した図面なら、区画の配置を置き換える。</p>
+  <div class="bp-row"><button id="bp-district">この区画をまるごと書き出す</button><button id="bp-clip">持っている図面を書き出す</button></div>
+  <textarea id="bp-text" spellcheck="false" placeholder="AA1. で始まる文字列"></textarea>
+  <p id="bp-msg" class="sub"></p>
+  <div class="bp-row"><button id="bp-copy">文字列をコピー</button><button id="bp-load">読み込む</button><button id="bp-close">閉じる</button></div>
+</div></div>
 <div id="goal"><div class="goal-box"><p class="sub">大目標を達成した</p><h2 id="goal-title"></h2><p id="goal-story"></p><p id="goal-reward" class="sub"></p><button id="goal-close">工房に戻る</button></div></div>
 <script type="module" src="src/ui/main.js"></script>
 </body>

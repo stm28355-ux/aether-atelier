@@ -203,6 +203,7 @@ function drawRubble(ctx, x, y) {
 }
 
 // opts：tool, dir, hover, alpha, overLimit(id), portLabel(e), showShake（揺れの範囲を見せる）
+//       sel（選んでいる範囲 {ax,ay,bx,by}）, paste（持っている図面 {bp, ox, oy, bad, ok}）
 export function draw(ctx, world, opts = {}) {
   const W = world.w * C, H = world.h * C;
   ctx.clearRect(0, 0, W, H);
@@ -243,6 +244,36 @@ export function draw(ctx, world, opts = {}) {
 
   for (const e of world.ents) drawEnt(ctx, world, e, opts);
   for (const e of world.ents) if (isHolder(e) && e.item) drawItemOnBelt(ctx, e, opts.alpha || 0);
+
+  // 選んでいる範囲
+  if (opts.sel) {
+    const { ax, ay, bx, by } = opts.sel;
+    ctx.fillStyle = 'rgba(60,120,220,0.14)';
+    ctx.fillRect(ax * C, ay * C, (bx - ax + 1) * C, (by - ay + 1) * C);
+    ctx.strokeStyle = '#2f6fd0'; ctx.lineWidth = 2; ctx.setLineDash([6, 4]);
+    ctx.strokeRect(ax * C + 1, ay * C + 1, (bx - ax + 1) * C - 2, (by - ay + 1) * C - 2);
+    ctx.setLineDash([]);
+  }
+  // 持っている図面：薄く描き、重なる物は赤
+  if (opts.paste) {
+    const { bp, ox, oy, bad, ok } = opts.paste;
+    ctx.save();
+    ctx.globalAlpha = 0.6;
+    for (const g of bp.ents) {
+      const b = world.data.buildings[g.id];
+      drawEnt(ctx, world, { ...g, kind: b.kind, x: ox + g.x, y: oy + g.y, w: b.w, h: b.h, item: null, partner: true, status: 'no-recipe' }, opts);
+    }
+    ctx.restore();
+    bp.ents.forEach((g, i) => {
+      if (!bad.has(i)) return;
+      const b = world.data.buildings[g.id];
+      ctx.fillStyle = 'rgba(192,57,43,0.42)';
+      ctx.fillRect((ox + g.x) * C, (oy + g.y) * C, b.w * C, b.h * C);
+    });
+    ctx.strokeStyle = ok ? '#3f8a4d' : '#c0392b'; ctx.lineWidth = 2; ctx.setLineDash([6, 4]);
+    ctx.strokeRect(ox * C + 1, oy * C + 1, bp.w * C - 2, bp.h * C - 2);
+    ctx.setLineDash([]);
+  }
 
   if (opts.tool && opts.hover) {
     const b = world.data.buildings[opts.tool];
