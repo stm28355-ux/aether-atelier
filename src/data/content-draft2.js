@@ -33,7 +33,7 @@ export const buildings = {
   lightPost: { name: '灯り台', w: 1, h: 1, field: 'light', radius: 2, mana: true },
   planter: { name: '育て床', w: 2, h: 2, recipes: ['grow', 'mosspot'] },
   spinner: { name: '紡ぎ機', w: 2, h: 2, recipes: ['spin'] },
-  loom: { name: '織機', w: 2, h: 2, recipes: ['weave', 'balloon'] },
+  loom: { name: '織機', w: 2, h: 2, recipes: ['weave', 'canvasAlt', 'balloon'] },
   shipyard: { name: '造船台', w: 4, h: 4, recipes: ['airship'], mana: true },
 };
 export const tools = {
@@ -48,6 +48,7 @@ export const altRecipes = {
   floatplank: 'assembler', // 組立台：板2＋浮遊石 → 浮き板
   compass: 'workbench', // からくり台：時計の機構＋レンズ＋光る苔 → 航海計器
   hull: 'workbench', // からくり台：浮き板2＋焼き入れ鋼＋枠 → 船体
+  frameAlt: 'press', // プレス機（別レシピ）：焼き入れ鋼 → 枠2（板から作るより材料が少ない。プレス機は揺れる）
 };
 
 export const recipes = {
@@ -60,6 +61,8 @@ export const recipes = {
   mosspot: { in: { glass: 1, moss: 2 }, out: { mosspot: 1 }, ticks: 30 },
   spin: { in: { drymoss: 2 }, out: { thread: 1 }, ticks: 20 },
   weave: { in: { thread: 3 }, out: { canvas: 1 }, ticks: 40 },
+  canvasAlt: { in: { thread: 2, sludge: 1 }, out: { canvas: 1 }, ticks: 40, alt: true }, // 澱で糊づけした帆布（糸が少なく済む）
+  frameAlt: { in: { steel: 1 }, out: { frame: 2 }, ticks: 40, alt: true },
   balloon: { in: { canvas: 2, floatstone: 1 }, out: { balloon: 1 }, ticks: 60 },
   compass: { in: { clockwork: 1, lens: 1, moss: 1 }, out: { compass: 1 }, ticks: 60 },
   hull: { in: { floatplank: 2, steel: 1, frame: 1 }, out: { hull: 1 }, ticks: 60 },
@@ -100,12 +103,12 @@ export const districts = [
     requests: [{ moss: 60 }, { moss: 90 }], opens: '育て床、優先分岐、区13' },
   { id: 'd13', name: '区13 帆と糸の工房', sys: '育てる（大目標）', w: 13, h: 9, leyline: false,
     rule: '熱で乾かす（光る苔は熱の中を2マスで乾き苔）', tool: '–',
-    raw: ['aether'], imports: ['moss', 'glass', 'refuel'], recipes: ['mosspot'], base: ['spinner', 'loom'],
+    raw: ['aether'], imports: ['moss', 'glass', 'refuel', 'sludge'], recipes: ['mosspot'], base: ['spinner', 'loom'],
     requests: [{ thread: 20 }, { canvas: 10, mosspot: 10 }], goal: '温室と市場', opens: '紡ぎ機・織機、温室と市場、区14' },
   { id: 'd14', name: '区14 飛空艇の部品工房', sys: '総まとめ', w: 16, h: 10, leyline: false,
     rule: '口が多い（前の大目標の物と第1部の余りを、たくさんの口から受け取る）', tool: '–',
     raw: ['aether'], imports: ['canvas', 'floatstone', 'clockwork', 'lens', 'moss', 'floatplank', 'steel', 'frame', 'refuel'],
-    recipes: ['balloon', 'compass', 'hull'], base: [],
+    recipes: ['balloon', 'compass', 'hull', 'canvasAlt', 'frameAlt'], base: [],
     requests: [{ balloon: 5 }, { compass: 5 }, { hull: 5 }, { balloon: 5, compass: 5, hull: 5 }], opens: '区15' },
   { id: 'd15', name: '区15 天空の造船所', sys: '総まとめ（大目標）', w: 14, h: 10, leyline: false,
     rule: '大きな機械（4×4の造船台。4種類を4つの辺から受け取る）', tool: '–',
