@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import content from '../src/data/content.js';
 import {
-  createGame, run, perMin, startCleanup, save, unlocked, setLayout, goals, recipesFor, PORT_CAP,
+  createGame, run, perMin, save, unlocked, setLayout, goals, recipesFor, clearedBy, PORT_CAP,
 } from '../src/core/game.js';
 import { rate, canPlace, snapshot } from '../src/core/sim.js';
 import { MODEL, STAGES, FIRST } from './models.js';
@@ -10,7 +10,7 @@ import { MODEL, STAGES, FIRST } from './models.js';
 const DISTRICTS = Object.keys(MODEL);
 const PART1 = ['d0', 'd1', 'd2', 'd3'];
 const FIRST_LAYOUTS = { d0: MODEL.d0, d1: FIRST.d1, d2: FIRST.d2, d3: MODEL.d3 };
-const fresh = (state) => createGame(content, { v: 1, done: {}, cleared: {}, made: {}, cleanup: null, ...state });
+const fresh = (state) => createGame(content, { v: 1, done: {}, cleared: {}, made: {}, ...state });
 // 第1部（区0〜3）を、最初に来たときの形で開く
 const part1 = () => fresh({ open: PART1, layouts: { ...FIRST_LAYOUTS } });
 // 全部の区画を、最後の段の形で開く
@@ -49,6 +49,7 @@ test('はじめから順に：お手本の配置で全部の依頼が達成で�
   run(g, 3 * 60 * 10); // 達成したあとも流し続ける
   const gl = goals(g);
   assert.deepEqual(gl.map((x) => [x.id, x.reached, x.flowing]), [['clocktower', true, true], ['lights', true, true]]);
+  for (const d of content.districts) assert.equal((g.state.cleared[d.id] || []).length, d.rubble.length, `${d.id} の瓦礫`);
 });
 
 test('第1部は、最初に来たときの形（区1は金属板60、区2は枠20）で依頼が達成できる', () => {
@@ -107,24 +108,38 @@ test('前の区画が何も作っていなければ、区2には何も届かな�
   assert.equal(rate(g.worlds.d2, 'gear'), 0);
 });
 
-test('瓦礫：余りの板を毎分30、1分流すと片づき、置けるようになる', () => {
+test('瓦礫：あとの区画の依頼を達成すると、前の区画の瓦礫が片づく', () => {
   const g = part1();
-  run(g, 2 * 60 * 10);
   assert.equal(canPlace(g.worlds.d0, 'belt', 0, 7).ok, false);
-  startCleanup(g, 'd0', 'a');
-  run(g, 90 * 10);
-  assert.deepEqual(g.state.cleared.d0, ['a']);
-  assert.equal(g.state.cleanup, null);
+  run(g, 10 * 60 * 10); // 区0〜3の依頼を全部達成する
+  assert.deepEqual(g.state.cleared.d0, ['a', 'b']); // 区2の1つ目と3つ目の依頼
+  assert.deepEqual(g.state.cleared.d1, ['a']); // 区3の最後の依頼（区4が開く）
   assert.equal(canPlace(g.worlds.d0, 'belt', 0, 7).ok, true);
-  assert.equal(canPlace(g.worlds.d0, 'belt', 6, 7).ok, false); // 隣の瓦礫は残る
+  assert.equal(canPlace(g.worlds.d1, 'belt', 0, 7).ok, true);
+  assert.equal(canPlace(g.worlds.d1, 'belt', 6, 7).ok, false); // 区1の右は区4の依頼で片づく
 });
 
-test('余りが足りなければ瓦礫は片づかない', () => {
-  const g = part1();
-  run(g, 2 * 60 * 10);
-  startCleanup(g, 'd0', 'b'); // 板を毎分60（余りは30しかない）
-  run(g, 3 * 60 * 10);
-  assert.equal(g.state.cleared.d0, undefined);
+test('瓦礫：どの瓦礫も、その区画よりあとの区画の依頼1つで片づく', () => {
+  const ids = content.districts.map((d) => d.id);
+  const count = {};
+  for (const d of content.districts) for (const r of d.requests) for (const [dist, patch] of r.clears || []) {
+    const def = content.districts.find((x) => x.id === dist);
+    assert.ok(def?.rubble.some((p) => p.id === patch), `${d.id} が片づける ${dist}${patch} がない`);
+    assert.ok(ids.indexOf(d.id) > ids.indexOf(dist), `${dist}${patch} を片づける ${d.id} が、あとの区画でない`);
+    count[dist + patch] = (count[dist + patch] || 0) + 1;
+  }
+  for (const d of content.districts) for (const p of d.rubble) {
+    assert.equal(count[d.id + p.id], 1, `${d.id}${p.id} を片づける依頼の数`);
+    assert.ok(clearedBy(content, d.id, p.id));
+  }
+});
+
+test('古いセーブ：達成済みの依頼の瓦礫は片づき、余りで片づけていた記録は消える', () => {
+  const g = fresh({ open: PART1, done: { d0: 2, d1: 3, d2: 3, d3: 3 }, cleanup: { district: 'd0', patch: 'b' } });
+  assert.deepEqual(g.state.cleared.d0, ['a', 'b']);
+  assert.deepEqual(g.state.cleared.d1, ['a']);
+  assert.equal(g.state.cleanup, undefined);
+  assert.equal(canPlace(g.worlds.d0, 'belt', 5, 7).ok, true);
 });
 
 test('使える建物は、開いた区画と達成した依頼で増える', () => {

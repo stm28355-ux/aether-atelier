@@ -59,14 +59,15 @@ const rect = (x, y, w, h) => {
 
 // 区画。w×h は瓦礫を含めた広さ。fixed は倉庫の口（imported は前の区画の物を出す口）。
 // base は区画を開いたときに使えるようになる物。依頼の unlock は報酬。
+// 瓦礫は、あとの区画の依頼の報酬で片づく（依頼の clears：[区画, 瓦礫の id]）。その区画の物を使う区画の依頼に結びつける
 export const districts = [
   {
     id: 'd0', name: '区0 工房の入口', sys: '機工',
     intro: '倉庫から出てくる木材を、製材機で板にして納める。',
     w: 9, h: 9, walls: [],
     rubble: [
-      { id: 'a', tiles: rect(0, 7, 5, 2), cost: { item: 'plank', perMin: 30 } },
-      { id: 'b', tiles: rect(5, 7, 4, 2), cost: { item: 'plank', perMin: 60 } },
+      { id: 'a', tiles: rect(0, 7, 5, 2) },
+      { id: 'b', tiles: rect(5, 7, 4, 2) },
     ],
     fixed: [
       { id: 'source', x: 0, y: 3, dir: 0, item: 'wood' },
@@ -83,8 +84,8 @@ export const districts = [
     intro: '竜炉の熱は、ベルトを流れる鉱石にも効く。熱の中を3マス進んだ鉱石は溶ける。金属板が熱を通ると赤熱するので気をつける。',
     w: 12, h: 9, walls: [],
     rubble: [
-      { id: 'a', tiles: rect(0, 7, 6, 2), cost: { item: 'plate', perMin: 15 } },
-      { id: 'b', tiles: rect(6, 7, 6, 2), cost: { item: 'dust', perMin: 15 } },
+      { id: 'a', tiles: rect(0, 7, 6, 2) },
+      { id: 'b', tiles: rect(6, 7, 6, 2) },
     ],
     fixed: [
       { id: 'source', x: 0, y: 4, dir: 0, item: 'ore' },
@@ -102,8 +103,8 @@ export const districts = [
     intro: '区0の板と区1の金属板が、倉庫から届く。届く量は、前の区画が納めている量まで。組立台は板を毎分60使う。',
     w: 9, h: 8, walls: [],
     rubble: [
-      { id: 'a', tiles: rect(0, 6, 5, 2), cost: { item: 'frame', perMin: 10 } },
-      { id: 'b', tiles: rect(5, 6, 4, 2), cost: { item: 'gear', perMin: 10 } },
+      { id: 'a', tiles: rect(0, 6, 5, 2) },
+      { id: 'b', tiles: rect(5, 6, 4, 2) },
     ],
     fixed: [
       { id: 'source', x: 0, y: 1, dir: 0, item: 'plank', imported: true },
@@ -112,9 +113,9 @@ export const districts = [
     ],
     base: ['assembler'], limits: {},
     requests: [
-      { targets: { frame: 20 }, unlock: ['press'], reward: 'プレス機' },
+      { targets: { frame: 20 }, unlock: ['press'], reward: 'プレス機', clears: [['d0', 'a']] },
       { targets: { gear: 30 }, unlock: ['under'], reward: '下をくぐるベルト（4マスまで下を通す）' },
-      { targets: { frame: 20, gear: 30 }, unlock: [], opens: 'd3', reward: '次の区画「灯りの工房」' },
+      { targets: { frame: 20, gear: 30 }, unlock: [], opens: 'd3', reward: '次の区画「灯りの工房」', clears: [['d0', 'b']] },
     ],
   },
   {
@@ -122,8 +123,8 @@ export const districts = [
     intro: 'ここには地脈がない。竜炉と研磨機は、魔力炉の範囲に入れないと動かない。魔力炉は燃料を毎分6燃やし、範囲の機械4台まで動かす。ガラスの素は熱の中を5マス進むとガラスになる。',
     w: 12, h: 9, walls: [],
     rubble: [
-      { id: 'a', tiles: rect(0, 7, 6, 2), cost: { item: 'glass', perMin: 15 } },
-      { id: 'b', tiles: rect(6, 7, 6, 2), cost: { item: 'lens', perMin: 10 } },
+      { id: 'a', tiles: rect(0, 7, 6, 2) },
+      { id: 'b', tiles: rect(6, 7, 6, 2) },
     ],
     fixed: [
       { id: 'source', x: 0, y: 1, dir: 0, item: 'sand' },
@@ -135,16 +136,16 @@ export const districts = [
     requests: [
       { targets: { glass: 30 }, unlock: ['polisher'], reward: '研磨機（ガラスからレンズ。魔力が要る）' },
       { targets: { lens: 15 }, unlock: [], reward: 'なし' },
-      { targets: { lens: 15, glass: 30 }, unlock: [], opens: 'd4', reward: '次の区画「からくり工房」' },
+      { targets: { lens: 15, glass: 30 }, unlock: [], opens: 'd4', reward: '次の区画「からくり工房」', clears: [['d1', 'a']] },
     ],
   },
   {
     id: 'd4', name: '区4 からくり工房', sys: '機工', leyline: false,
-    intro: '旋盤は、辺で接する旋盤1台ごとに25%速くなる（ここでは2台まで）。区1の金属板と区2の枠・歯車が倉庫から届く。金属板が足りなければ、区1を改善して倉庫に入る量を増やす。',
+    intro: '旋盤は、辺で接する旋盤1台ごとに25%速くなる（ここでは2台まで）。区1の金属板と区2の枠・歯車が倉庫から届く。金属板が足りなければ、区1を改善して倉庫に入る量を増やす（区3の最後の依頼の報酬で、区1の瓦礫が片づいて広くなっている）。',
     w: 12, h: 10, walls: [],
     rubble: [
-      { id: 'a', tiles: rect(0, 8, 6, 2), cost: { item: 'screw', perMin: 30 } },
-      { id: 'b', tiles: rect(6, 8, 6, 2), cost: { item: 'gearbox', perMin: 10 } },
+      { id: 'a', tiles: rect(0, 8, 6, 2) },
+      { id: 'b', tiles: rect(6, 8, 6, 2) },
     ],
     fixed: [
       { id: 'source', x: 4, y: 0, dir: 1, item: 'plate', imported: true },
@@ -155,8 +156,8 @@ export const districts = [
     ],
     base: ['lathe'], recipes: ['gearbox'], limits: { lathe: 2 },
     requests: [
-      { targets: { screw: 75 }, unlock: ['workbench'], reward: 'からくり台（3×3。枠・歯車・ねじから歯車箱。魔力が要る）' },
-      { targets: { gearbox: 15 }, unlock: [], opens: 'd5', reward: '次の区画「霜の蔵」' },
+      { targets: { screw: 75 }, unlock: ['workbench'], reward: 'からくり台（3×3。枠・歯車・ねじから歯車箱。魔力が要る）', clears: [['d2', 'a']] },
+      { targets: { gearbox: 15 }, unlock: [], opens: 'd5', reward: '次の区画「霜の蔵」', clears: [['d1', 'b']] },
     ],
   },
   {
@@ -164,8 +165,8 @@ export const districts = [
     intro: '霜の柱の冷気は、ベルトの上のエーテル水を4マスで結晶にし、赤熱した板を2マスで焼き入れ鋼にする。熱と冷気が重なったマスは打ち消し合う。倉庫の口からは金属板とエーテル水が混ざって出てくるので、選り分けで分ける。',
     w: 12, h: 9, walls: [],
     rubble: [
-      { id: 'a', tiles: rect(0, 7, 6, 2), cost: { item: 'crystal', perMin: 15 } },
-      { id: 'b', tiles: rect(6, 7, 6, 2), cost: { item: 'steel', perMin: 15 } },
+      { id: 'a', tiles: rect(0, 7, 6, 2) },
+      { id: 'b', tiles: rect(6, 7, 6, 2) },
     ],
     fixed: [
       { id: 'source', x: 0, y: 3, dir: 0, item: 'plate', imported: true, extra: 'aether' },
@@ -175,7 +176,7 @@ export const districts = [
     requests: [
       { targets: { crystal: 30 }, unlock: [], reward: 'なし' },
       { targets: { steel: 30 }, unlock: [], reward: 'なし' },
-      { targets: { crystal: 30, steel: 30 }, unlock: [], opens: 'd6', reward: '次の区画「時計塔の基部」' },
+      { targets: { crystal: 30, steel: 30 }, unlock: [], opens: 'd6', reward: '次の区画「時計塔の基部」', clears: [['d3', 'a'], ['d4', 'a']] },
     ],
   },
   {
@@ -183,8 +184,8 @@ export const districts = [
     intro: '巻き機とプレス機は揺れる。揺れの範囲（周り2マス）に1マスでも入ったからくり台は止まる。あふれ口は、先が詰まった物を倉庫へ戻すので、混ぜたベルトが止まらない。',
     w: 13, h: 10, walls: [],
     rubble: [
-      { id: 'a', tiles: rect(0, 8, 7, 2), cost: { item: 'spring', perMin: 10 } },
-      { id: 'b', tiles: rect(7, 8, 6, 2), cost: { item: 'clockwork', perMin: 5 } },
+      { id: 'a', tiles: rect(0, 8, 7, 2) },
+      { id: 'b', tiles: rect(7, 8, 6, 2) },
     ],
     fixed: [
       { id: 'source', x: 0, y: 3, dir: 0, item: 'steel', imported: true },
@@ -194,9 +195,9 @@ export const districts = [
     ],
     base: ['winder', 'overflow'], recipes: ['clockwork'], limits: {},
     requests: [
-      { targets: { spring: 15 }, unlock: [], reward: 'からくり台で時計の機構を作る' },
+      { targets: { spring: 15 }, unlock: [], reward: 'からくり台で時計の機構を作る', clears: [['d4', 'b'], ['d5', 'a']] },
       {
-        targets: { clockwork: 10 }, unlock: [], opens: 'd7', reward: '大目標「時計塔が動く」、次の区画「灯台通り」',
+        targets: { clockwork: 10 }, unlock: [], opens: 'd7', reward: '大目標「時計塔が動く」、次の区画「灯台通り」', clears: [['d3', 'b'], ['d5', 'b']],
         goal: { id: 'clocktower', title: '時計塔が動く', story: '止まっていた時計塔の針が、ゆっくりと動き出した。霧の町に、時を告げる鐘がまた響く。' },
       },
     ],
@@ -204,11 +205,8 @@ export const districts = [
   {
     id: 'd7', name: '区7 灯台通り', sys: '炉と霜', leyline: false,
     intro: '研磨機に別のレシピが増えた：エーテル結晶1個からレンズ1個（ガラスからより2倍速い）。機械をクリックするとレシピを選べる。',
-    w: 13, h: 10, walls: [],
-    rubble: [
-      { id: 'a', tiles: rect(0, 8, 7, 2), cost: { item: 'lens', perMin: 15 } },
-      { id: 'b', tiles: rect(7, 8, 6, 2), cost: { item: 'lantern', perMin: 5 } },
-    ],
+    w: 13, h: 8, walls: [],
+    rubble: [], // あとの区画（第3部）を作るときに足す
     fixed: [
       { id: 'source', x: 12, y: 0, dir: 2, item: 'aether' },
       { id: 'source', x: 0, y: 1, dir: 0, item: 'glass', imported: true },
@@ -218,9 +216,9 @@ export const districts = [
     ],
     base: [], recipes: ['lensAlt', 'lantern'], limits: {},
     requests: [
-      { targets: { lens: 30 }, unlock: [], reward: 'からくり台で魔導ランタンを作る' },
+      { targets: { lens: 30 }, unlock: [], reward: 'からくり台で魔導ランタンを作る', clears: [['d2', 'b'], ['d6', 'a']] },
       {
-        targets: { lantern: 10 }, unlock: [], reward: '大目標「町に灯りがつく」',
+        targets: { lantern: 10 }, unlock: [], reward: '大目標「町に灯りがつく」', clears: [['d6', 'b']],
         goal: { id: 'lights', title: '町に灯りがつく', story: '霧の通りに、魔導ランタンがひとつ、またひとつと灯っていく。港の灯台にも光が戻った。' },
       },
     ],

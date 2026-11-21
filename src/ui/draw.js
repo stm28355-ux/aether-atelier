@@ -191,8 +191,8 @@ function drawItemOnBelt(ctx, h, alpha) {
   drawItem(ctx, it.t, fx + (tx - fx) * f, fy + (ty - fy) * f, 32);
 }
 
-function drawRubble(ctx, x, y, hot) {
-  ctx.fillStyle = hot ? '#d9c9a8' : '#cfc3ad';
+function drawRubble(ctx, x, y) {
+  ctx.fillStyle = '#cfc3ad';
   ctx.fillRect(x * C, y * C, C, C);
   ctx.fillStyle = '#9a8c74';
   for (const [dx, dy, r] of [[11, 13, 6], [26, 11, 5], [19, 26, 7], [31, 28, 4]]) {
@@ -202,16 +202,15 @@ function drawRubble(ctx, x, y, hot) {
   ctx.beginPath(); ctx.arc(x * C + 18, y * C + 24, 3, 0, 7); ctx.fill();
 }
 
-// opts：tool, dir, hover, alpha, overLimit(id), cleanupTiles（片づけ中の瓦礫のマス）, portLabel(e), showShake（揺れの範囲を見せる）
+// opts：tool, dir, hover, alpha, overLimit(id), portLabel(e), showShake（揺れの範囲を見せる）
 export function draw(ctx, world, opts = {}) {
   const W = world.w * C, H = world.h * C;
   ctx.clearRect(0, 0, W, H);
   ctx.fillStyle = '#f4efe6';
   ctx.fillRect(0, 0, W, H);
-  const hot = new Set((opts.cleanupTiles || []).map(([x, y]) => y * world.w + x));
   for (let y = 0; y < world.h; y++) for (let x = 0; x < world.w; x++) {
     const i = y * world.w + x;
-    if (world.blocked[i] === RUBBLE) { drawRubble(ctx, x, y, hot.has(i)); continue; }
+    if (world.blocked[i] === RUBBLE) { drawRubble(ctx, x, y); continue; }
     if (world.blocked[i] === WALL) {
       ctx.fillStyle = '#b9ae9c';
       ctx.beginPath(); ctx.roundRect(x * C + 4, y * C + 4, C - 8, C - 8, 10); ctx.fill();
@@ -233,11 +232,6 @@ export function draw(ctx, world, opts = {}) {
   for (let x = 1; x < world.w; x++) { ctx.moveTo(x * C + 0.5, 0); ctx.lineTo(x * C + 0.5, H); }
   for (let y = 1; y < world.h; y++) { ctx.moveTo(0, y * C + 0.5); ctx.lineTo(W, y * C + 0.5); }
   ctx.stroke();
-  if (hot.size) {
-    ctx.strokeStyle = '#b5541c'; ctx.lineWidth = 2; ctx.setLineDash([6, 4]);
-    for (const [x, y] of opts.cleanupTiles) ctx.strokeRect(x * C + 2, y * C + 2, C - 4, C - 4);
-    ctx.setLineDash([]);
-  }
 
   // 下をくぐるベルトの組（地面の下の線）
   ctx.strokeStyle = 'rgba(59,53,46,0.45)'; ctx.lineWidth = 3; ctx.setLineDash([4, 5]);

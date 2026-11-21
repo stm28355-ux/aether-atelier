@@ -1,8 +1,8 @@
 // 画面：町の地図・区画・図鑑。ゲームの中身は core/game.js。
 import content from '../data/content.js';
 import {
-  createGame, step as stepGame, layoutChanged, resetDistrict, unlocked, perMin, startCleanup,
-  districtDef, save, recipesFor, goals,
+  createGame, step as stepGame, layoutChanged, resetDistrict, unlocked, perMin,
+  districtDef, save, recipesFor, goals, clearedBy,
 } from '../core/game.js';
 import {
   place, remove, entAt, rate, rebuild, setRecipe, backRate, TPS, DX, DY, UNDER_GAP, FUEL_CAP, SHAKE_RADIUS, BELT_TICKS,
@@ -111,7 +111,7 @@ function updateMap() {
   }
   const rows = Object.keys(items).filter((t) => perMin(game, 'in', t) || perMin(game, 'out', t));
   $('warehouse').innerHTML = rows.length
-    ? `<tr><th>素材</th><th>入る</th><th>使われる</th><th>余り</th></tr>${rows.map((t) => `<tr><td>${dot(t)}${itemName(t)}</td><td>${perMin(game, 'in', t)}</td><td>${perMin(game, 'out', t)}</td><td>${perMin(game, 'spare', t) + perMin(game, 'clean', t)}</td></tr>`).join('')}`
+    ? `<tr><th>素材</th><th>入る</th><th>使われる</th><th>余り</th></tr>${rows.map((t) => `<tr><td>${dot(t)}${itemName(t)}</td><td>${perMin(game, 'in', t)}</td><td>${perMin(game, 'out', t)}</td><td>${perMin(game, 'spare', t)}</td></tr>`).join('')}`
     : '<tr><td>まだ何も入っていない</td></tr>';
   paintIcons();
 }
@@ -347,25 +347,38 @@ function renderRequests() {
         html += `<div class="bar" data-item="${t}" data-n="${r.targets[t]}"><i></i></div><div class="row"><span>${dot(t)}${itemName(t)}</span><span data-rate="${t}"></span></div>`;
       }
     }
-    html += `<div class="rw">報酬：${r.reward}</div>`;
+    html += `<div class="rw">報酬：${rewardText(r)}</div>`;
     el.innerHTML = html;
     return el;
   }));
   updateDistrictPanels();
 }
 
+// 瓦礫の呼び方：「区1の瓦礫（左）」
+const shortName = (id) => districtDef(game, id).name.split(' ')[0];
+const patchSide = (patch) => (Math.min(...patch.tiles.map(([x]) => x)) === 0 ? '左' : '右');
+function rubbleName(district, patchId) {
+  const patch = districtDef(game, district).rubble.find((p) => p.id === patchId);
+  return `${shortName(district)}の瓦礫（${patchSide(patch)}）`;
+}
+// 報酬の文：書いてある報酬と、片づく瓦礫。skipGoal は大目標の窓用（大目標の名前を除く）
+function rewardText(r, skipGoal = false) {
+  const parts = [];
+  if (r.reward && r.reward !== 'なし') parts.push(...r.reward.split('、').filter((p) => !(skipGoal && p.startsWith('大目標'))));
+  for (const [d, p] of r.clears || []) parts.push(`${rubbleName(d, p)}が片づく`);
+  return parts.join('、') || (skipGoal ? '' : 'なし');
+}
+
 function renderRubble() {
   const left = def.rubble.filter((r) => !(game.state.cleared[ui.district] || []).includes(r.id));
-  const c = game.state.cleanup;
-  if (!left.length) { $('rubble').innerHTML = '<p class="sub">この区画の瓦礫はすべて片づけた</p>'; return; }
+  if (!def.rubble.length) { $('rubble').innerHTML = '<p class="sub">この区画には瓦礫がない</p>'; return; }
+  if (!left.length) { $('rubble').innerHTML = '<p class="sub">この区画の瓦礫はすべて片づいた</p>'; return; }
   $('rubble').innerHTML = left.map((r) => {
-    const active = c && c.district === ui.district && c.patch === r.id;
-    return `<div class="req ${active ? '' : 'wait-no'}"><div class="t">${r.tiles.length}マス：${itemName(r.cost.item)}を毎分${r.cost.perMin}、1分</div>
-      ${active ? `<div class="bar" data-clean="${r.cost.item}" data-n="${r.cost.perMin}"><i></i></div><div class="row"><span>余りから</span><span data-cleanrate></span></div>` : `<button data-clean-start="${r.id}">片づける</button>`}</div>`;
-  }).join('') + '<p class="hint">片づけは、倉庫の「余り」（あとの区画が受け取らなかった分）で行う。同時に片づけられるのは1か所。</p>';
-  for (const b of document.querySelectorAll('[data-clean-start]')) {
-    b.onclick = () => { startCleanup(game, ui.district, b.dataset.cleanStart); persist(); renderRubble(); };
-  }
+    const by = clearedBy(content, ui.district, r.id);
+    const where = by ? `${districtDef(game, by.district).name}の依頼「${reqText(by.request)}」を達成すると片づく` : 'あとの区画で片づく';
+    const notYet = by && !game.state.open.includes(by.district) ? '<span class="sub">（まだ開いていない区画）</span>' : '';
+    return `<div class="req wait-no"><div class="t">${patchSide(r)}の${r.tiles.length}マス</div><div class="rw">${where}${notYet}</div></div>`;
+  }).join('') + '<p class="hint">瓦礫は、この区画の物を使うあとの区画で依頼を達成すると、報酬で片づいて置ける場所になる。</p>';
 }
 
 function updateDistrictPanels() {
@@ -384,12 +397,6 @@ function updateDistrictPanels() {
   $('imports-box').style.display = ports.length ? '' : 'none';
   $('imports').innerHTML = ports.map((p) => `<div class="row"><span>${dot(p.item)}${itemName(p.item)}</span><span>倉庫に入る ${perMin(game, 'in', p.item)}</span></div>`).join('')
     + (ports.length ? '<p class="hint">倉庫に入る量を、受け取る口で等分する。足りなければ前の区画を改善する。</p>' : '');
-  const cb = document.querySelector('[data-clean]');
-  if (cb) {
-    const t = cb.dataset.clean, n = Number(cb.dataset.n), r = perMin(game, 'clean', t);
-    cb.firstChild.style.width = `${Math.min(100, (r / n) * 100)}%`;
-    document.querySelector('[data-cleanrate]').textContent = `毎分 ${r} / ${n}`;
-  }
   paintIcons();
 }
 
@@ -405,19 +412,19 @@ function handleEvents() {
   while (game.events.length) {
     const ev = game.events.shift();
     const d = districtDef(game, ev.district);
-    if (ev.type === 'request') toast(`${d.name}：依頼達成！<br>報酬：${ev.request.reward}`);
-    if (ev.type === 'goal') showGoal(ev.request.goal, ev.request.reward);
-    if (ev.type === 'cleared') toast(`${d.name}：瓦礫を片づけた。置ける場所が広がった`);
+    // 片づいた瓦礫は、依頼達成の知らせの報酬に入っている（cleared は画面を描き直すだけ）
+    if (ev.type === 'request') toast(`${d.name}：依頼達成！<br>報酬：${rewardText(ev.request)}${ev.request.clears?.length ? '<br>前の区画が広くなった' : ''}`);
+    if (ev.type === 'goal') showGoal(ev.request);
     persist();
     if (ui.screen === 'district') { renderPalette(); renderRequests(); renderRubble(); }
     if (ui.screen === 'map') renderMap();
   }
 }
 
-function showGoal(goal, reward) {
-  $('goal-title').textContent = `大目標「${goal.title}」`;
-  $('goal-story').textContent = goal.story;
-  $('goal-reward').textContent = reward.includes('次の区画') ? reward.replace(/^.*?、/, '') : '';
+function showGoal(r) {
+  $('goal-title').textContent = `大目標「${r.goal.title}」`;
+  $('goal-story').textContent = r.goal.story;
+  $('goal-reward').textContent = rewardText(r, true);
   $('goal').classList.add('show');
 }
 $('goal-close').onclick = () => $('goal').classList.remove('show');
@@ -628,7 +635,7 @@ function updateInfo() {
     else if (e.kind === 'emitter') s += emitterInfo(e);
     else if (e.kind === 'under') s += underInfo(e);
     else if (e.item) s += `：${itemName(e.item.t)}`;
-  } else if (t && world.blocked[t.y * world.w + t.x] === 2) { name = '瓦礫'; s = '：右の「瓦礫」から片づけると置けるようになる'; }
+  } else if (t && world.blocked[t.y * world.w + t.x] === 2) { name = '瓦礫'; s = '：あとの区画の依頼を達成すると片づく（どの依頼かは右の「瓦礫」）'; }
   const html = name ? `<b>${name}</b>${s}` : '';
   if (html !== lastInfo) { $('info').innerHTML = html; lastInfo = html; }
 }
@@ -655,10 +662,8 @@ function frame(now) {
   }
   ui.alpha = ui.paused ? 0 : acc;
   if (ui.screen === 'district') {
-    const c = game.state.cleanup;
-    const cleanupTiles = c && c.district === ui.district ? def.rubble.find((r) => r.id === c.patch)?.tiles : null;
     draw(canvas.getContext('2d'), world, {
-      tool: ui.tool, dir: ui.dir, hover: ui.hover, alpha: ui.alpha, overLimit, cleanupTiles,
+      tool: ui.tool, dir: ui.dir, hover: ui.hover, alpha: ui.alpha, overLimit,
       showShake: world.ents.some((e) => buildings[e.id].fragile) || !!(ui.tool && (buildings[ui.tool].fragile || buildings[ui.tool].shake)),
       underRole: ui.tool === 'under' && ui.hover ? underRole(ui.hover.x, ui.hover.y, ui.dir) : null,
       portLabel: () => '受取',

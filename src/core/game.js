@@ -4,7 +4,9 @@
 // - 区画の「納める口」に入った物は倉庫へ入る
 // - 前の区画の物を出す口（imported）は、倉庫に入ってくる物を順番に等分して受け取る。
 //   1つの口にためられるのは PORT_CAP 個まで（貯めて一気に出せない）
-// - 受け取る口がない分は「余り」。瓦礫を片づけている間は、その素材の余りが片づけに回る
+// - 受け取る口がない分は「余り」
+//
+// 瓦礫（11/21 決定）：あとの区画の依頼を達成すると、報酬で前の区画の瓦礫が片づく（依頼の clears）
 import {
   createWorld, place, remove, step as stepWorld, rate, serialize, rebuild, clearTiles, TPS,
 } from './sim.js';
@@ -16,11 +18,10 @@ const emptyState = () => ({
   v: SAVE_VERSION,
   open: ['d0'],
   done: {},
-  cleared: {}, // 区画 → 片づけた瓦礫の id
+  cleared: {}, // 区画 → 片づいた瓦礫の id
   layouts: {}, // 区画 → 置いた物（倉庫の口は含めない）
   made: {}, // 素材 → これまでに納めた合計（図鑑）
   seen: {}, // 素材 → ベルトの上で見たことがある（図鑑）
-  cleanup: null, // { district, patch }
 });
 
 export function createGame(content, saved = null) {
@@ -28,27 +29,46 @@ export function createGame(content, saved = null) {
   const game = {
     content, state, tick: 0,
     worlds: {},
-    hist: [], // 1秒ごとの倉庫の出入り { in:{}, out:{}, spare:{}, clean:{} }
+    hist: [], // 1秒ごとの倉庫の出入り { in:{}, out:{}, spare:{} }
     cur: null,
     rr: {}, // 素材ごとの、次に渡す口の順番
     events: [], // 画面に知らせること（依頼達成など）
   };
   game.cur = newBucket();
-  // 区画が後から増えたとき：達成済みの依頼が開くはずの区画を開く（古いセーブのため）
+  // 区画や報酬が後から増えたとき：達成済みの依頼が開くはずの区画を開き、片づくはずの瓦礫を片づける（古いセーブのため）
   for (const d of content.districts) {
     d.requests.slice(0, state.done[d.id] || 0).forEach((r) => {
       if (r.opens && !state.open.includes(r.opens) && content.districts.some((x) => x.id === r.opens)) state.open.push(r.opens);
+      for (const [dist, patch] of r.clears || []) markCleared(state, dist, patch);
     });
   }
+  delete state.cleanup; // 余りで片づけていたころの記録
   state.open = state.open.filter((id) => content.districts.some((d) => d.id === id));
   for (const id of state.open) buildWorld(game, id);
   return game;
 }
 
-const newBucket = () => ({ in: {}, out: {}, spare: {}, clean: {} });
+const newBucket = () => ({ in: {}, out: {}, spare: {} });
 const add = (o, k, n = 1) => { o[k] = (o[k] || 0) + n; };
 
 export const districtDef = (game, id) => game.content.districts.find((d) => d.id === id);
+
+// 片づいた瓦礫を記録する。新しく片づいたら true
+function markCleared(state, district, patch) {
+  const list = (state.cleared[district] ||= []);
+  if (list.includes(patch)) return false;
+  list.push(patch);
+  return true;
+}
+
+// この瓦礫を片づける依頼：{ district, index, request }
+export function clearedBy(content, district, patch) {
+  for (const d of content.districts) {
+    const index = d.requests.findIndex((r) => (r.clears || []).some(([x, p]) => x === district && p === patch));
+    if (index >= 0) return { district: d.id, index, request: d.requests[index] };
+  }
+  return null;
+}
 
 function rubbleLeft(game, def) {
   const cleared = game.state.cleared[def.id] || [];
@@ -145,8 +165,6 @@ function importPorts(game) {
 // 倉庫に入った物を、前の区画の物を出す口へ順番に配る
 function distribute(game, item, n) {
   const ports = game.ports[item] || [];
-  const c = game.state.cleanup;
-  const cleanItem = c && rubbleCost(game, c.district, c.patch)?.item;
   for (let k = 0; k < n; k++) {
     let given = false;
     for (let t = 0; t < ports.length; t++) {
@@ -159,18 +177,8 @@ function distribute(game, item, n) {
         break;
       }
     }
-    if (given) continue;
-    if (cleanItem === item) add(game.cur.clean, item);
-    else add(game.cur.spare, item);
+    if (!given) add(game.cur.spare, item);
   }
-}
-
-export function rubbleCost(game, district, patch) {
-  return districtDef(game, district)?.rubble.find((r) => r.id === patch)?.cost;
-}
-
-export function startCleanup(game, district, patch) {
-  game.state.cleanup = { district, patch };
 }
 
 // 直近60秒の合計（＝毎分の量）
@@ -193,21 +201,13 @@ function checkRequests(game, id) {
     buildWorld(game, r.opens);
   }
   game.events.push({ type: r.goal ? 'goal' : 'request', district: id, index: k, request: r });
-}
-
-function checkCleanup(game) {
-  const c = game.state.cleanup;
-  if (!c) return;
-  const cost = rubbleCost(game, c.district, c.patch);
-  if (!cost) { game.state.cleanup = null; return; }
-  if (perMin(game, 'clean', cost.item) < cost.perMin) return;
-  (game.state.cleared[c.district] ||= []).push(c.patch);
-  const patch = districtDef(game, c.district).rubble.find((r) => r.id === c.patch);
-  clearTiles(game.worlds[c.district], patch.tiles);
-  game.state.cleanup = null;
-  // 片づけの記録は使い切る（次の片づけに持ち越さない）
-  for (const b of game.hist) b.clean = {};
-  game.events.push({ type: 'cleared', district: c.district, patch: c.patch });
+  // 報酬で前の区画の瓦礫が片づく
+  for (const [dist, patch] of r.clears || []) {
+    if (!markCleared(game.state, dist, patch)) continue;
+    const tiles = districtDef(game, dist)?.rubble.find((p) => p.id === patch)?.tiles || [];
+    if (game.worlds[dist]) clearTiles(game.worlds[dist], tiles);
+    game.events.push({ type: 'cleared', district: dist, patch, by: id });
+  }
 }
 
 function markSeen(game) {
@@ -243,7 +243,6 @@ export function step(game) {
     game.cur = newBucket();
     for (const id of [...game.state.open]) checkRequests(game, id);
     markSeen(game);
-    checkCleanup(game);
   }
 }
 
