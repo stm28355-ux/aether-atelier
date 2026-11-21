@@ -89,7 +89,7 @@ function renderMap() {
   const later = document.createElement('p');
   later.className = 'hint later';
   later.innerHTML = TRIAL ? '試作モード：第2部の新しい仕組み（副産物・時間で変わる・光の範囲・増える）を1つずつ試す区画です。本編のセーブとは別です。<a href="./">本編へ戻る</a>'
-    : '第2部の飛空艇（区14・15）は作っているところ。<a href="?trial">第2部の新しい仕組みを試す（試作モード）</a>';
+    : '<a href="?trial">第2部の新しい仕組みを1つずつ試す（試作モード）</a>';
   grid.append(later);
   updateMap();
 }
@@ -110,6 +110,9 @@ function paintTown() {
     clock: !!(gl.clocktower?.reached && gl.clocktower.flowing),
     clockStopped: !!(gl.clocktower?.reached && !gl.clocktower.flowing),
     lights: !!(gl.lights?.reached && gl.lights.flowing),
+    bridge: !!(gl.bridge?.reached && gl.bridge.flowing),
+    greenhouse: !!(gl.greenhouse?.reached && gl.greenhouse.flowing),
+    airship: !!(gl.airship?.reached && gl.airship.flowing),
     hover: townHover,
     t: game.tick,
   });

@@ -136,6 +136,6 @@ table.rules td { border-top: 1px solid var(--line); padding: 3px 10px 3px 0; }
 #bp-msg { min-height: 1.4em; margin: 2px 0; }
 
 /* フェーズ7：町の絵 */
-#town { display: block; width: 100%; max-width: 760px; aspect-ratio: 760 / 400; margin: 0 0 12px; image-rendering: pixelated; cursor: default; }
+#town { display: block; width: 100%; max-width: 760px; aspect-ratio: 760 / 680; margin: 0 0 12px; image-rendering: pixelated; cursor: default; }
 #map-grid .card { margin-bottom: 0; padding: 8px 10px; }
 #map-grid .card b { font-size: 13px; }

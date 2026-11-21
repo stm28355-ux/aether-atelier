@@ -362,8 +362,11 @@ export const districts = [
   {
     id: 'd13', name: '区13 帆と糸の工房', sys: '育てる', leyline: false, part: 2,
     intro: '光る苔は竜炉の熱の中を2マス進むと乾き苔になる。紡ぎ機は乾き苔2から魔法の糸、織機は糸3から帆布。育て床ではガラス1と光る苔2から苔の鉢（育て床をクリックしてレシピを選ぶ）。苔の鉢にする苔は熱に通さない。苔の口は区12が納めた苔だけを受け取る。澱の口は、区14が開くと使い道ができる。',
-    w: 13, h: 9, walls: [],
-    rubble: [], // 総まとめの区画を作るとき（フェーズ13）に足す
+    w: 13, h: 11, walls: [],
+    rubble: [
+      { id: 'a', tiles: rect(0, 9, 6, 2) },
+      { id: 'b', tiles: rect(6, 9, 7, 2) },
+    ],
     fixed: [
       { id: 'source', x: 0, y: 1, dir: 0, item: 'moss', imported: true, from: 'd12' },
       { id: 'source', x: 0, y: 6, dir: 0, item: 'glass', imported: true },
@@ -375,8 +378,57 @@ export const districts = [
     requests: [
       { targets: { thread: 20 }, unlock: [], reward: 'なし', clears: [['d11', 'b'], ['d12', 'a']] },
       {
-        targets: { canvas: 10, mosspot: 10 }, unlock: [], reward: '大目標「温室と市場」', clears: [['d12', 'b']],
+        targets: { canvas: 10, mosspot: 10 }, unlock: [], opens: 'd14', reward: '大目標「温室と市場」、次の区画「飛空艇の部品工房」', clears: [['d12', 'b']],
         goal: { id: 'greenhouse', title: '温室と市場', story: 'ガラスの温室に光る苔の鉢が並び、市場には帆布の天幕が張られた。霧の町に、青白い灯りの市が立つ。' },
+      },
+    ],
+  },
+  // ---- 第2部：総まとめ（区14・15） ----
+  {
+    id: 'd14', name: '区14 飛空艇の部品工房', sys: '総まとめ', part: 2,
+    intro: 'これまでの区画の物が、たくさんの口から届く。織機で浮き袋（帆布2＋浮遊石）、からくり台で航海計器（時計の機構＋レンズ＋光る苔）と船体（浮き板2＋焼き入れ鋼＋枠）。機械をクリックしてレシピを選ぶ。ここには地脈があるので魔力は要らない。この区画が開くと、前の区画で使える別のレシピが2つ増える：織機の帆布（糸2＋澱）、プレス機の枠（焼き入れ鋼1から枠2）。',
+    w: 16, h: 11, walls: [],
+    rubble: [
+      { id: 'a', tiles: rect(0, 9, 8, 2) },
+      { id: 'b', tiles: rect(8, 9, 8, 2) },
+    ],
+    fixed: [
+      { id: 'source', x: 0, y: 0, dir: 0, item: 'lens', imported: true },
+      { id: 'source', x: 0, y: 1, dir: 0, item: 'clockwork', imported: true },
+      { id: 'source', x: 0, y: 2, dir: 0, item: 'moss', imported: true, from: 'd12' },
+      { id: 'source', x: 0, y: 5, dir: 0, item: 'steel', imported: true },
+      { id: 'source', x: 0, y: 6, dir: 0, item: 'frame', imported: true },
+      { id: 'source', x: 0, y: 8, dir: 0, item: 'floatplank', imported: true },
+      { id: 'source', x: 12, y: 0, dir: 1, item: 'canvas', imported: true },
+      { id: 'source', x: 13, y: 0, dir: 1, item: 'floatstone', imported: true },
+      { id: 'sink', x: 15, y: 7, dir: 0 },
+    ],
+    base: [], recipes: ['balloon', 'compass', 'hull', 'canvasAlt', 'frameAlt'], limits: {},
+    requests: [
+      { targets: { balloon: 5 }, unlock: [], reward: 'なし' },
+      { targets: { compass: 5 }, unlock: [], reward: 'なし', clears: [['d13', 'a']] },
+      { targets: { hull: 5 }, unlock: [], reward: 'なし' },
+      { targets: { balloon: 5, compass: 5, hull: 5 }, unlock: [], opens: 'd15', reward: '次の区画「天空の造船所」', clears: [['d13', 'b']] },
+    ],
+  },
+  {
+    id: 'd15', name: '区15 天空の造船所', sys: '総まとめ', leyline: false, part: 2,
+    intro: '造船台は4×4の大きな機械（魔力が要る）。浮き袋・航海計器・船体を1つずつと魔導ランタン2つから、60秒かけて飛空艇を1隻組む。魔力炉1つの範囲には入りきらない。区14の部品と区7のランタン、区8の精製燃料が倉庫から届く。',
+    w: 14, h: 10, walls: [],
+    rubble: [],
+    fixed: [
+      { id: 'source', x: 0, y: 3, dir: 0, item: 'compass', imported: true },
+      { id: 'source', x: 0, y: 5, dir: 0, item: 'refuel', imported: true },
+      { id: 'source', x: 0, y: 7, dir: 0, item: 'lantern', imported: true },
+      { id: 'source', x: 10, y: 0, dir: 1, item: 'balloon', imported: true },
+      { id: 'source', x: 10, y: 9, dir: 3, item: 'hull', imported: true },
+      { id: 'sink', x: 13, y: 4, dir: 0 },
+    ],
+    base: ['shipyard'], recipes: [], limits: {},
+    requests: [
+      {
+        targets: { airship: 1 }, unlock: [], reward: '大目標「飛空艇が飛ぶ」', clears: [['d14', 'a'], ['d14', 'b']],
+        goal: { id: 'airship', title: '飛空艇が飛ぶ', story: '浮き袋がふくらみ、船体がゆっくりと造船所を離れた。霧の町の空を、工房の飛空艇が渡っていく。' },
       },
     ],
   },
@@ -452,7 +504,7 @@ export const gatedRecipes = [...new Set([
   ...Object.keys(draft2.altRecipes), 'canvasAlt', 'mosspot', 'balloon',
 ])];
 
-// 地図に出す、まだ作っていない区画（第2部の総まとめ）
+// 地図に出す、まだ作っていない区画（今はない）
 export const upcoming = draft2.districts
   .filter((d) => !districts.some((x) => x.id === d.id))
   .map((d) => ({ id: d.id, name: d.name, sys: d.sys.replace(/（.*）/, '') }));

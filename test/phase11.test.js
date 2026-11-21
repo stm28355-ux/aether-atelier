@@ -71,6 +71,6 @@ test('区10：浮き板を毎分20で、大目標「浮き橋がかかる」', (
   assert.ok(bridge.reached && bridge.flowing);
 });
 
-test('地図：まだ作っていない第2部の区画は「準備中」として並ぶ', () => {
-  assert.deepEqual(content.upcoming.map((u) => u.id), ['d14', 'd15']);
+test('地図：準備中の区画はもうない', () => {
+  assert.deepEqual(content.upcoming, []);
 });
