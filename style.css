@@ -139,3 +139,8 @@ table.rules td { border-top: 1px solid var(--line); padding: 3px 10px 3px 0; }
 #town { display: block; width: 100%; max-width: 760px; aspect-ratio: 760 / 680; margin: 0 0 12px; image-rendering: pixelated; cursor: default; }
 #map-grid .card { margin-bottom: 0; padding: 8px 10px; }
 #map-grid .card b { font-size: 13px; }
+
+/* 操作の説明（開け閉め） */
+#help { margin: 14px 0 8px; }
+#help summary { cursor: pointer; font-weight: 600; font-size: 13px; color: var(--sub); margin-bottom: 6px; }
+#help summary::marker { color: var(--sub); }

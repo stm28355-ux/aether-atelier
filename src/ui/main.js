@@ -67,10 +67,16 @@ function renderMap() {
     const def = districtDef(game, id) || content.upcoming.find((u) => u.id === id);
     if (!def) continue;
     const st = districtState(id);
+    if (!TRIAL && id === 'd0') { // 第1部の始まり
+      const head = document.createElement('p');
+      head.className = 'hint later part';
+      head.textContent = '第1部：機工と炉と霜（大目標「時計塔が動く」「町に灯りがつく」）';
+      grid.append(head);
+    }
     if (!TRIAL && id === 'd8') { // 第2部の始まり
       const head = document.createElement('p');
       head.className = 'hint later part';
-      head.textContent = '第2部：エーテル・育てる・飛空艇（区7の大目標「町に灯りがつく」で開く）';
+      head.textContent = '第2部：エーテル・育てる・飛空艇（区7の大目標「町に灯りがつく」で開く。大目標「浮き橋がかかる」「温室と市場」「飛空艇が飛ぶ」）';
       grid.append(head);
     }
     const card = document.createElement('div');
@@ -175,16 +181,24 @@ const ioIcons = (o) => Object.entries(o).map(([k, n]) => `${dot(k)}${itemName(k)
 // 今選べるレシピ（[設備, レシピ]）
 const allRecipes = () => Object.keys(buildings).flatMap((bid) => (buildings[bid].recipes ? recipesFor(game, bid).map((r) => [bid, r]) : []));
 
+const FUEL_USE = { fuel: '魔力炉の燃料（1つで10秒燃える）', refuel: '魔力炉の燃料（燃料2つ分、20秒燃える）' };
 function howMade(t) {
   if (items[t].sys === '倉庫') return ['倉庫から出てくる'];
-  const list = allRecipes().filter(([, r]) => content.recipes[r].out[t]).map(([bid, r]) => `${buildings[bid].name}で ${ioIcons(content.recipes[r].in)} から`);
+  const list = allRecipes().filter(([, r]) => content.recipes[r].out[t]).map(([bid, r]) => {
+    const others = Object.keys(content.recipes[r].out).filter((o) => o !== t);
+    return `${buildings[bid].name}で ${ioIcons(content.recipes[r].in)} から${others.length ? `（${others.map((o) => `${dot(o)}${knownName(o)}`).join('・')}も一緒に出る）` : ''}`;
+  });
   for (const f of content.fieldRules) if (f.to === t) list.push(`${dot(f.from)}${knownName(f.from)}が<b>${FIELD_NAME[f.field]}の中を${tiles(f)}マス</b>進む`);
+  for (const d of content.decayRules || []) if (d.to === t) list.push(`${dot(d.from)}${knownName(d.from)}が<b>${d.ticks / TPS}秒</b>たつ（時間で変わる）`);
   return list;
 }
 function usesOf(t) {
-  const list = allRecipes().filter(([, r]) => content.recipes[r].in[t])
-    .map(([bid, r]) => `${buildings[bid].name}で ${Object.keys(content.recipes[r].out).map((o) => `${dot(o)}${knownName(o)}`).join('')} に`);
+  const list = [...new Set(allRecipes().filter(([, r]) => content.recipes[r].in[t])
+    .map(([bid, r]) => `${buildings[bid].name}で ${Object.keys(content.recipes[r].out).map((o) => `${dot(o)}${knownName(o)}`).join('・')} に`))];
+  if (FUEL_USE[t]) list.push(FUEL_USE[t]);
   for (const f of content.fieldRules) if (f.from === t) list.push(`<b>${FIELD_NAME[f.field]}の中を${tiles(f)}マス</b>進むと ${dot(f.to)}${knownName(f.to)} になる`);
+  for (const d of content.decayRules || []) if (d.from === t) list.push(`<b>${d.ticks / TPS}秒</b>たつと ${dot(d.to)}${knownName(d.to)} になる（冷気の中では止まる）`);
+  for (const d of content.districts) for (const r of d.requests) if (r.goal && r.targets[t]) list.push(`大目標「${r.goal.title}」（${d.name}）`);
   return list;
 }
 function bookItems() {
@@ -203,8 +217,8 @@ function bookItems() {
 function bookRules() {
   const has = new Set(unlocked(game));
   const row = (f) => `<tr><td>${FIELD_NAME[f.field]}</td><td>${tiles(f)}マス</td><td>${dot(f.from)}${knownName(f.from)}</td><td>→</td><td>${known(f.to) ? dot(f.to) : ''}${knownName(f.to)}</td></tr>`;
-  let html = `<section class="rule"><h3>熱と冷気で変わる物</h3>
-    <p>熱と冷気は、ベルトの上を流れる物に効く。範囲の中にいた長さの合計で変わる（1マス進む長さ＝0.5秒を、1マスと数える）。</p>
+  let html = `<section class="rule"><h3>熱・冷気・光で変わる物</h3>
+    <p>熱・冷気・光は、ベルトの上を流れる物に効く。範囲の中にいた長さの合計で変わる（1マス進む長さ＝0.5秒を、1マスと数える）。</p>
     <ul><li>ベルトの上で止まっていても、範囲の中にいる間は数える（詰まると、思っていない物に変わることがある）</li>
     <li>範囲を出ても、それまでに数えた分は残る</li>
     <li>熱と冷気が重なったマスは打ち消し合い、どちらも効かない（灰色のマス）</li>
@@ -216,12 +230,23 @@ function bookRules() {
     html += `<section class="rule"><h3>時間で変わる物</h3><p>ベルトの上で時間がたつと変わる。ベルトの上で待っていても数える。冷気の中では時間が止まる。素材の右上の輪が、残りの時間。</p><ul>${decays.map((r) => `<li>${dot(r.from)}${itemName(r.from)}は${r.ticks / TPS}秒で${dot(r.to)}${knownName(r.to)}になる</li>`).join('')}</ul></section>`;
   }
   if (has.has('manaFurnace')) {
+    const needs = [...has].filter((id) => buildings[id].mana).map((id) => buildings[id].name).join('・');
     html += `<section class="rule"><h3>魔力</h3><ul>
-      <li>地脈のない区画（区3から）では、竜炉・研磨機・霜の柱・からくり台は魔力が要る</li>
+      <li>地脈のない区画（区3から）では、${needs}は魔力が要る</li>
+      ${has.has('refiner') || TRIAL ? '<li>精製燃料は、魔力炉で燃料2つ分燃える</li>' : ''}
       <li>魔力炉は燃料を毎分${buildings.manaFurnace.fuelPerMin}燃やし、周り${buildings.manaFurnace.radius}マス（紫の点）に魔力を出す。範囲の機械${buildings.manaFurnace.powers}台まで、ふつうの速さで動かす（多いと全部が遅くなる）</li>
       <li>機械の全部のマスが紫の点の中にあれば動く。いくつかの魔力炉の範囲を合わせてよい（からくり台は魔力炉2つで挟む）</li></ul></section>`;
   }
   if (has.has('lathe')) html += '<section class="rule"><h3>相乗</h3><ul><li>旋盤は、辺で接する旋盤1台ごとに25%速い（2台まで、最大50%）</li></ul></section>';
+  const part2 = [];
+  if (has.has('fastBelt')) part2.push('<li><b>速いベルト</b>：ふつうの2.5倍の速さ（1マス0.2秒）。時間で変わる素材を遠くへ運ぶときや、たくさん運ぶとき（毎分300個まで）に</li>');
+  if (has.has('prioritySplitter')) part2.push('<li><b>優先分岐</b>：正面に入れられるときは必ず正面へ。正面が詰まっているときだけ左右へ。増やした苔を「育て床に戻すのが先、余りを納める」のように使う</li>');
+  if (has.has('refiner')) part2.push('<li><b>副産物</b>：出す物が2つある機械は、正面から交互に出す。どちらかが先で詰まると、機械が止まる。選り分けやあふれ口でよける</li>');
+  if (has.has('planter')) part2.push('<li><b>増える</b>：育て床は光る苔1を2にする。増えた苔の一部を育て床に戻すと、届く苔より多く納められる</li>');
+  if (game.state.open.includes('d10') || TRIAL) part2.push('<li><b>水</b>：水のマスには何も置けない。下をくぐるベルトなら、水の下を4マスまで通せる</li>');
+  if (game.state.open.includes('d12')) part2.push('<li><b>どの区画から受け取るか</b>：「区11から」のように書いた口は、その区画が納めた物だけを受け取る（自分の区画が納めた物が、倉庫を回って戻ってこない）</li>');
+  if (has.has('shipyard')) part2.push('<li><b>大きな機械</b>：造船台は4×4。魔力炉1つの範囲には入りきらないので、2つの範囲を合わせる</li>');
+  if (part2.length) html += `<section class="rule"><h3>第2部の仕組み</h3><ul>${part2.join('')}</ul></section>`;
   if (has.has('workbench')) html += `<section class="rule"><h3>揺れ</h3><ul><li>プレス機と巻き機は、置いているだけで周り${SHAKE_RADIUS}マスを揺らす（斜めの線）</li><li>からくり台は、1マスでも揺れの範囲に入ると止まる</li></ul></section>`;
   return html;
 }
@@ -344,6 +369,14 @@ const TOOL_NOTE = {
   under: '入口を置き、同じ向きで前に出口を置く（間は4マスまで）。くぐっている間は範囲が効かない',
   sorter: '後ろから受けて、選んだ素材だけ左右へ、残りは正面へ。置いてからクリックで素材を選ぶ',
   overflow: '先が詰まった物を倉庫へ戻す。混ぜたベルトが、余った物で止まらない',
+  fastBelt: '物を運ぶ。ふつうのベルトの2.5倍の速さ（1マス0.2秒、毎分300個まで）。ドラッグで引く。ふつうのベルトの上に引くと置き換わる',
+  prioritySplitter: '後ろから受けて、正面に入れられるときは正面へ。正面が詰まっているときだけ左右へ順に出す',
+};
+// 機械の説明に足すこと（第2部の仕組み）
+const MACHINE_NOTE = {
+  refiner: '出す物が2つ（精製エーテルと澱）。正面から交互に出し、片方が詰まると止まる',
+  planter: '光る苔1から2に増える（差し引き1台で毎分15）。増えた苔の一部を戻して使う',
+  shipyard: '4×4の大きな機械。魔力炉1つの範囲には入りきらない（2つで挟む）',
 };
 // 範囲を出す物の説明。熱と冷気は、何マスで何が変わるかを中身（fieldRules）から書く
 function fieldText(field) {
@@ -351,15 +384,15 @@ function fieldText(field) {
   const by = {};
   for (const f of content.fieldRules) if (f.field === field && known(f.from)) (by[tiles(f)] ||= []).push(`${itemName(f.from)}→${itemName(f.to)}`);
   const rules = Object.entries(by).map(([n, l]) => `${n}マスで ${l.join('、')}`).join('。');
-  return `周りに${FIELD_NAME[field]}の範囲を作る${rules ? `。${rules}` : ''}${field === 'cold' ? '。熱と重なったマスは打ち消し合う' : ''}`;
+  return `周りに${FIELD_NAME[field]}の範囲を作る${rules ? `。${rules}` : ''}${field === 'cold' ? '。熱と重なったマスは打ち消し合う。時間で変わる素材は、冷気の中では時間が止まる' : ''}${field === 'light' ? '。熱や冷気と重なっても打ち消し合わない' : ''}`;
 }
 // inDistrict：区画の中で見る説明か（レシピと、その区画で魔力が要るかを入れる）。図鑑では false
 function buildingNote(id, inDistrict = true) {
   const b = buildings[id];
-  const notes = [TOOL_NOTE[id]];
+  const notes = [TOOL_NOTE[id], MACHINE_NOTE[id]];
   if (b.recipes && inDistrict) notes.push(recipesFor(game, id).map((r) => recipeText(r)).join(' ／ '));
   if (b.field) notes.push(fieldText(b.field));
-  if (b.field === 'mana') notes.push(`燃料を毎分${b.fuelPerMin}燃やし、範囲の魔力が要る機械${b.powers}台まで動かす`);
+  if (b.field === 'mana') notes.push(`燃料を毎分${b.fuelPerMin}燃やし、範囲の魔力が要る機械${b.powers}台まで動かす${items.refuel && (TRIAL || known('refuel')) ? '。精製燃料は燃料2つ分' : ''}`);
   if (b.synergy) notes.push('辺で接する同じ機械1台ごとに25%速い（2台まで）');
   if (b.shake) notes.push(`揺れる（周り${SHAKE_RADIUS}マスのからくり台は止まる）`);
   if (b.fragile) notes.push(`揺れる機械から${SHAKE_RADIUS}マス以内だと止まる`);
@@ -368,18 +401,17 @@ function buildingNote(id, inDistrict = true) {
   return notes.filter(Boolean).join('。');
 }
 // 置く物の種類（タブ）。1〜9 は今のタブの中で選ぶ、Tab で切り替える
-// 作る機械は、はじめのレシピでできる物の系統（機工／炉と霜）で分ける
-const machineSys = (b) => items[Object.keys(content.recipes[b.recipes[0]].out)[0]].sys;
+// 何をする物かで4つに分ける（どのタブも9個まで＝1〜9で選べる）
+const MAKE_TAB = { // 作る機械のうち「組立」に入る物。ほかの機械は「加工」
+  assembler: 1, press: 1, lathe: 1, winder: 1, workbench: 1, spinner: 1, loom: 1, shipyard: 1,
+};
 const TABS = [
-  { id: 'move', name: '運ぶ', note: 'ベルト・分岐など、物を運ぶ道具', has: (b) => b.kind !== 'machine' && b.kind !== 'emitter' },
-  { id: 'kiko', name: '機工', note: '木と金属を組む機械（製材機・組立台・プレス機・旋盤など）', has: (b) => b.kind === 'machine' && machineSys(b) === '機工' },
-  { id: 'ro', name: '炉と霜', note: '砕く・型に流す・混ぜる・磨く機械（粉砕機・鋳型台・調合台・研磨機など）', has: (b) => b.kind === 'machine' && machineSys(b) === '炉と霜' },
-  { id: 'ether', name: 'エーテル', note: 'エーテルを精製する機械（精製器・浸し槽）', has: (b) => b.kind === 'machine' && machineSys(b) === 'エーテル' },
-  { id: 'grow', name: '育てる', note: '苔を育てる・紡ぐ・織る機械（育て床・紡ぎ機・織機）', has: (b) => b.kind === 'machine' && machineSys(b) === '育てる' },
-  { id: 'final', name: '総まとめ', note: '飛空艇を組む機械（造船台）', has: (b) => b.kind === 'machine' && machineSys(b) === '総まとめ' },
+  { id: 'move', name: '運ぶ', note: 'ベルト・分岐・下をくぐるベルトなど、物を運ぶ道具', has: (b) => b.kind !== 'machine' && b.kind !== 'emitter' },
+  { id: 'proc', name: '加工', note: '原料を加工する機械（製材機・粉砕機・鋳型台・調合台・蒸留器・研磨機・精製器・浸し槽・育て床）', has: (b) => b.kind === 'machine' && !MAKE_TAB[b.id] },
+  { id: 'make', name: '組立', note: '部品を組み立てる・紡ぐ・織る機械（組立台・プレス機・旋盤・巻き機・からくり台・紡ぎ機・織機・造船台）', has: (b) => b.kind === 'machine' && !!MAKE_TAB[b.id] },
   { id: 'field', name: '範囲', note: '熱・冷気・魔力・光の範囲を出す物（竜炉・霜の柱・魔力炉・灯り台）', has: (b) => b.kind === 'emitter' },
 ];
-const inTab = (tab) => placeable().filter((id) => TABS.find((g) => g.id === tab).has(buildings[id]));
+const inTab = (tab) => placeable().filter((id) => TABS.find((g) => g.id === tab).has({ ...buildings[id], id }));
 const tabsShown = () => TABS.filter((g) => inTab(g.id).length);
 function switchTab(stepN) {
   const s = tabsShown();
@@ -405,6 +437,10 @@ function makesHtml(id) {
   return TOOL_SHORT[id] || '';
 }
 
+// 操作の説明：開け閉めを覚える
+try { if (localStorage.getItem('aether-atelier-help') === 'closed') $('help').open = false; } catch {}
+$('help').addEventListener('toggle', () => { try { localStorage.setItem('aether-atelier-help', $('help').open ? 'open' : 'closed'); } catch {} });
+
 function renderPalette() {
   const shown = tabsShown();
   if (!shown.some((g) => g.id === ui.tab)) ui.tab = shown[0]?.id ?? 'move';
@@ -413,7 +449,7 @@ function renderPalette() {
     el.textContent = g.name;
     el.title = `${g.note}（Tab で切り替え）`;
     el.className = g.id === ui.tab ? 'on' : '';
-    if (ui.tool && g.id !== ui.tab && g.has(buildings[ui.tool])) el.classList.add('holding'); // 持っている物は別のタブ
+    if (ui.tool && g.id !== ui.tab && g.has({ ...buildings[ui.tool], id: ui.tool })) el.classList.add('holding'); // 持っている物は別のタブ
     el.onclick = () => { ui.tab = g.id; renderPalette(); };
     return el;
   }));
@@ -503,7 +539,7 @@ function updateDistrictPanels() {
   const ports = world.ents.filter((e) => e.kind === 'source' && e.imported);
   $('imports-box').style.display = ports.length ? '' : 'none';
   $('imports').innerHTML = ports.map((p) => (p.from
-    ? `<div class="row"><span>${dot(p.item)}${itemName(p.item)}（${districtDef(game, p.from).name.split(' ')[0]}から）</span><span>${districtDef(game, p.from).name.split(' ')[0]}が納める ${game.worlds[p.from] ? rate(game.worlds[p.from], p.item) : 0}</span></div>`
+    ? `<div class="row"><span>${dot(p.item)}${itemName(p.item)}<small class="sub">　${districtDef(game, p.from).name.split(' ')[0]}から</small></span><span>${districtDef(game, p.from).name.split(' ')[0]}が納める ${game.worlds[p.from] ? rate(game.worlds[p.from], p.item) : 0}</span></div>`
     : `<div class="row"><span>${dot(p.item)}${itemName(p.item)}</span><span>倉庫に入る ${perMin(game, 'in', p.item)}</span></div>`)).join('')
     + (ports.length ? '<p class="hint">倉庫に入る量を、受け取る口で等分する。足りなければ前の区画を改善する。</p>' : '');
   paintIcons();

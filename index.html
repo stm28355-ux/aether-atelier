@@ -24,7 +24,7 @@
 
 <main id="screen-map" class="screen">
   <section class="map-main">
-    <p class="lead">灯りが消えて寂れた霧の町。工房の新しい主として、区画ごとに工場を建て、町を元に戻していく。開いた区画は、見ていない間も動き続ける。</p>
+    <p class="lead">灯りが消えて寂れた霧の町。工房の新しい主として、区画ごとに工場を建て、町を元に戻し、最後は飛空艇を空へ送り出す。開いた区画は、見ていない間も動き続ける。地図の建物をクリックすると、その区画へ入る。</p>
     <canvas id="town"></canvas>
     <div id="map-grid"></div>
   </section>
@@ -41,7 +41,7 @@
 <main id="screen-book" class="screen">
   <section class="book-main">
     <h2>図鑑</h2>
-    <p class="hint">工場で見たことのある物が載る。</p>
+    <p class="hint">工場で見たことのある物と、使える設備、範囲や仕組みのきまりが載る。</p>
     <div class="book-tabs"><button data-book="items" class="on">素材</button><button data-book="rules">範囲のきまり</button><button data-book="buildings">設備</button></div>
     <div id="book"></div>
   </section>
@@ -60,7 +60,7 @@
     <h2>置く物</h2>
     <div id="palette-tabs"></div>
     <div id="palette"></div>
-    <h2>操作</h2>
+    <details id="help" open><summary>操作</summary>
     <ul class="help">
       <li>左クリック：置く（ベルトはドラッグで引く）</li>
       <li>右クリック：壊す／持っている物を手放す</li>
@@ -73,8 +73,8 @@
       <li>壊す・置き直すは何度でもタダ</li>
       <li>下をくぐるベルト：入口を置き、同じ向きで前に出口を置く（間は4マスまで）</li>
       <li>置いた機械をクリック（何も持たないか、同じ物を持って）：レシピ、選り分けの素材を選ぶ</li>
-      <li>置く物にマウスを載せると説明が出る</li>
-    </ul>
+      <li>置く物にマウスを載せると説明が出る。設備と素材のくわしいことは図鑑に</li>
+    </ul></details>
     <button id="reset">この区画をやり直す</button>
     <button id="openall">（試作用）全部開く</button>
   </aside>
