@@ -1,5 +1,5 @@
 // 盤面を canvas に描く。素材は試し描きの絵（sprites.js）、機械は色の家族。
-import { DX, DY, BELT_TICKS, WALL, RUBBLE, SHAKE_RADIUS, canPlace, isHolder } from '../core/sim.js';
+import { DX, DY, BELT_TICKS, WALL, RUBBLE, WATER, SHAKE_RADIUS, canPlace, isHolder } from '../core/sim.js';
 import { drawItem, MACHINE_STYLE, FIELD_TINT } from './sprites.js';
 import { drawMachineArt, hasArt } from './machines.js';
 
@@ -302,6 +302,7 @@ export function draw(ctx, world, opts = {}) {
   for (let y = 0; y < world.h; y++) for (let x = 0; x < world.w; x++) {
     const i = y * world.w + x;
     if (world.blocked[i] === RUBBLE) { drawRubble(ctx, x, y); continue; }
+    if (world.blocked[i] === WATER) { drawWater(ctx, world, x, y); continue; }
     if (world.blocked[i] === WALL) {
       ctx.fillStyle = '#b9ae9c';
       ctx.beginPath(); ctx.roundRect(x * C + 4, y * C + 4, C - 8, C - 8, 10); ctx.fill();
@@ -398,4 +399,21 @@ export function draw(ctx, world, opts = {}) {
     } else if (b.kind === 'machine') frontEdge(ctx, ghost, '#2b2118');
     else if (b.kind === 'belt' || b.kind === 'splitter' || b.kind === 'sorter' || b.kind === 'overflow') arrow(ctx, x * C + C / 2, y * C + C / 2, opts.dir, 10, '#2b2118');
   }
+}
+
+// 水のマス：青い水面に小さな波。岸（となりが足場）には明るい縁
+function drawWater(ctx, world, x, y) {
+  const px = x * C, py = y * C;
+  ctx.fillStyle = '#7fa7b8';
+  ctx.fillRect(px, py, C, C);
+  ctx.fillStyle = '#a9cad6';
+  const o = (x * 7 + y * 3) % 3;
+  ctx.fillRect(px + 6 + o * 4, py + 10, 10, 2);
+  ctx.fillRect(px + 20 - o * 3, py + 26, 12, 2);
+  const land = (i, j) => i >= 0 && j >= 0 && i < world.w && j < world.h && world.blocked[j * world.w + i] !== WATER;
+  ctx.fillStyle = '#cdbf9f';
+  if (land(x, y - 1)) ctx.fillRect(px, py, C, 3);
+  if (land(x, y + 1)) ctx.fillRect(px, py + C - 3, C, 3);
+  if (land(x - 1, y)) ctx.fillRect(px, py, 3, C);
+  if (land(x + 1, y)) ctx.fillRect(px + C - 3, py, 3, C);
 }

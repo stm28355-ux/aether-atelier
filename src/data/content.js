@@ -237,8 +237,11 @@ export const districts = [
   {
     id: 'd7', name: '区7 灯台通り', sys: '炉と霜', leyline: false,
     intro: '研磨機に別のレシピが増えた：エーテル結晶1個からレンズ1個（ガラスからより2倍速い）。機械をクリックするとレシピを選べる。',
-    w: 13, h: 8, walls: [],
-    rubble: [], // あとの区画（第2部）を作るときに足す
+    w: 13, h: 10, walls: [],
+    rubble: [ // 第2部の区8・区9の依頼で片づく
+      { id: 'a', tiles: rect(0, 8, 7, 2) },
+      { id: 'b', tiles: rect(7, 8, 6, 2) },
+    ],
     fixed: [
       { id: 'source', x: 12, y: 0, dir: 2, item: 'aether' },
       { id: 'source', x: 0, y: 1, dir: 0, item: 'glass', imported: true },
@@ -250,8 +253,67 @@ export const districts = [
     requests: [
       { targets: { lens: 30 }, unlock: [], reward: 'からくり台で魔導ランタンを作る', clears: [['d2', 'b'], ['d6', 'a']] },
       {
-        targets: { lantern: 10 }, unlock: [], reward: '大目標「町に灯りがつく」', clears: [['d6', 'b']],
+        targets: { lantern: 10 }, unlock: [], opens: 'd8', reward: '大目標「町に灯りがつく」、第2部の区画「霧の精製所」', clears: [['d6', 'b']],
         goal: { id: 'lights', title: '町に灯りがつく', story: '霧の通りに、魔導ランタンがひとつ、またひとつと灯っていく。港の灯台にも光が戻った。' },
+      },
+    ],
+  },
+  // ---- 第2部：エーテル（区8〜10） ----
+  {
+    id: 'd8', name: '区8 霧の精製所', sys: 'エーテル', leyline: false, part: 2,
+    intro: '精製器はエーテル水2から、精製エーテル1と澱1を正面から交互に出す（副産物）。蒸留器は精製エーテルから精製燃料を作るが、澱は受け取らない。澱を逃がさないと精製器が詰まって止まる。澱も納める口へ入れてよい。',
+    w: 12, h: 8, walls: [],
+    rubble: [
+      { id: 'a', tiles: rect(0, 6, 6, 2) },
+      { id: 'b', tiles: rect(6, 6, 6, 2) },
+    ],
+    fixed: [
+      { id: 'source', x: 0, y: 2, dir: 0, item: 'aether' },
+      { id: 'sink', x: 11, y: 2, dir: 0 },
+    ],
+    base: ['refiner'], recipes: ['refuel'], limits: {},
+    requests: [
+      { targets: { refined: 15 }, unlock: [], reward: 'なし' },
+      { targets: { refuel: 30 }, unlock: [], opens: 'd9', reward: '次の区画「浮き石の工房」', clears: [['d7', 'a']] },
+    ],
+  },
+  {
+    id: 'd9', name: '区9 浮き石の工房', sys: 'エーテル', leyline: false, part: 2,
+    intro: '調合台で澱と砂を練ると浮遊石の素。浮遊石の素は、できてから6秒（ふつうのベルトで12マス分）で石くずになる。ベルトの上で待っていても数える。冷気の中では時間が止まる。浸し槽（魔力が要る）は浮遊石の素と精製エーテルから浮遊石。速いベルトはふつうの2.5倍の速さ。魔力炉の燃料は、区8の精製燃料（燃料2つ分）が倉庫から届く。',
+    w: 14, h: 11, walls: [],
+    rubble: [
+      { id: 'a', tiles: rect(0, 9, 7, 2) },
+      { id: 'b', tiles: rect(7, 9, 7, 2) },
+    ],
+    fixed: [
+      { id: 'source', x: 0, y: 1, dir: 0, item: 'aether' },
+      { id: 'source', x: 0, y: 8, dir: 0, item: 'sand' },
+      { id: 'source', x: 7, y: 0, dir: 1, item: 'refuel', imported: true },
+      { id: 'sink', x: 13, y: 6, dir: 0 },
+    ],
+    base: ['steeper', 'fastBelt'], recipes: ['floatmix'], limits: {},
+    requests: [
+      { targets: { floatstone: 15 }, unlock: [], reward: 'なし', clears: [['d8', 'a']] },
+      { targets: { floatstone: 30 }, unlock: [], opens: 'd10', reward: '次の区画「浮き橋の桟橋」', clears: [['d7', 'b']] },
+    ],
+  },
+  {
+    id: 'd10', name: '区10 浮き橋の桟橋', sys: 'エーテル', leyline: false, part: 2,
+    intro: '港の桟橋。水の上には何も置けない。足場は岸と島と細い桟橋だけ。下をくぐるベルトなら、水の下を4マスまで通せる。組立台に板2と浮遊石1で浮き板（別のレシピ。機械をクリックして選ぶ）。浮遊石は区9から倉庫を通して届く。',
+    w: 18, h: 6, walls: [],
+    water: [...rect(4, 0, 3, 4), ...rect(4, 5, 3, 1), ...rect(12, 0, 4, 6)],
+    rubble: [], // 第2部の育てるの区画を作るときに足す
+    fixed: [
+      { id: 'source', x: 0, y: 2, dir: 0, item: 'wood' },
+      { id: 'source', x: 9, y: 0, dir: 1, item: 'floatstone', imported: true },
+      { id: 'sink', x: 17, y: 4, dir: 0 },
+    ],
+    base: [], recipes: ['floatplank'], limits: {},
+    requests: [
+      { targets: { floatplank: 10 }, unlock: [], reward: 'なし', clears: [['d8', 'b'], ['d9', 'a']] },
+      {
+        targets: { floatplank: 20 }, unlock: [], reward: '大目標「浮き橋がかかる」', clears: [['d9', 'b']],
+        goal: { id: 'bridge', title: '浮き橋がかかる', story: '港の水の上に、浮き板を並べた橋が静かに浮かんだ。霧の向こうの島へ、歩いて渡れるようになった。' },
       },
     ],
   },
@@ -327,7 +389,9 @@ export const gatedRecipes = [...new Set([
   ...Object.keys(draft2.altRecipes), 'canvasAlt', 'mosspot', 'balloon',
 ])];
 
-// 地図に出す、まだ作っていない区画（第2部：エーテル・育てる・飛空艇）
-export const upcoming = [];
+// 地図に出す、まだ作っていない区画（第2部の育てる・総まとめ）
+export const upcoming = draft2.districts
+  .filter((d) => !districts.some((x) => x.id === d.id))
+  .map((d) => ({ id: d.id, name: d.name, sys: d.sys.replace(/（.*）/, '') }));
 
 export default { items, buildings, recipes, fieldRules, decayRules, districts, upcoming, gatedRecipes };

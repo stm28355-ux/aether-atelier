@@ -1,3 +1,5 @@
+import { STAGES2 } from './models2.js';
+
 // お手本の配置。区画を小さくしても、依頼が納まる配置が実際にあることを守る。
 // STAGES は依頼の段ごとの配置（前の依頼を達成したら、次の配置に置き直す）。MODEL は最後の段。
 const E = 0, S = 1, W = 2, N = 3;
@@ -128,5 +130,6 @@ export const FIRST = { d1: d1First, d2: d2First };
 export const STAGES = {
   d0: [d0], d1: [d1], d2: [d2], d3: [d3a, d3],
   d4: [d4a, d4b], d5: [d5], d6: [d6a, d6b], d7: [d7a, d7b],
+  ...STAGES2,
 };
 export const MODEL = Object.fromEntries(Object.entries(STAGES).map(([id, st]) => [id, st[st.length - 1]]));

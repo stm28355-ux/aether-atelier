@@ -52,7 +52,7 @@ document.querySelectorAll('[data-go]').forEach((b) => { b.onclick = () => { loca
 
 // ---- 町の地図 ----
 // 区画は開く順に並べる（地図の絵も、カードも）
-const ORDER = content.districts.map((d) => d.id);
+const ORDER = [...content.districts, ...content.upcoming].map((d) => d.id);
 let townHover = null;
 function districtState(id) {
   const def = districtDef(game, id);
@@ -67,6 +67,12 @@ function renderMap() {
     const def = districtDef(game, id) || content.upcoming.find((u) => u.id === id);
     if (!def) continue;
     const st = districtState(id);
+    if (!TRIAL && id === 'd8') { // 第2部の始まり
+      const head = document.createElement('p');
+      head.className = 'hint later part';
+      head.textContent = '第2部：エーテル・育てる・飛空艇（区7の大目標「町に灯りがつく」で開く）';
+      grid.append(head);
+    }
     const card = document.createElement('div');
     card.className = `card ${st}`;
     let body = '';
@@ -83,7 +89,7 @@ function renderMap() {
   const later = document.createElement('p');
   later.className = 'hint later';
   later.innerHTML = TRIAL ? '試作モード：第2部の新しい仕組み（副産物・時間で変わる・光の範囲・増える）を1つずつ試す区画です。本編のセーブとは別です。<a href="./">本編へ戻る</a>'
-    : 'ここまでが第1部（機工と炉と霜）。この先の第2部：エーテル・育てる・飛空艇の系統を作っている。<a href="?trial">第2部の新しい仕組みを試す（試作モード）</a>';
+    : '第2部の育てる（区11〜13）と飛空艇（区14・15）は作っているところ。<a href="?trial">第2部の新しい仕組みを試す（試作モード）</a>';
   grid.append(later);
   updateMap();
 }
@@ -945,6 +951,7 @@ function updateInfo() {
     if (e.fast) s += '｜2.5倍の速さ';
     if (e.priority) s += '：正面に入れられるときは正面へ、詰まっているときだけ左右へ';
   } else if (t && world.blocked[t.y * world.w + t.x] === 2) { name = '瓦礫'; s = '：あとの区画の依頼を達成すると片づく（どの依頼かは右の「瓦礫」）'; }
+  else if (t && world.blocked[t.y * world.w + t.x] === 3) { name = '水'; s = '：何も置けない。下をくぐるベルトなら、水の下を4マスまで通せる'; }
   const html = name ? `<b>${name}</b>${s}` : '';
   if (html !== lastInfo) { $('info').innerHTML = html; lastInfo = html; }
 }

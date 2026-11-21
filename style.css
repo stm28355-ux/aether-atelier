@@ -101,6 +101,7 @@ table.rules td { border-top: 1px solid var(--line); padding: 3px 10px 3px 0; }
 .ok { color: var(--ok); font-weight: 600; }
 .warn { color: #c0392b; font-weight: 600; }
 .later { grid-column: 1 / -1; text-align: center; }
+.later.part { margin: 6px 0 0; font-weight: 600; color: #6b5f52; }
 #picker { position: fixed; z-index: 20; display: none; width: 270px; max-height: 320px; overflow: auto; background: var(--panel); border: 1px solid var(--accent); border-radius: 10px; padding: 8px; box-shadow: 0 6px 20px rgba(0,0,0,0.18); }
 #picker.show { display: block; }
 #picker .pk-t { font-size: 12px; color: var(--sub); margin-bottom: 4px; }

@@ -29,9 +29,9 @@ const FUEL_VALUE = { fuel: 1, refuel: 2 }; // 魔力炉に入れたときの燃�
 export const SHAKE_RADIUS = 2;
 export const SYN_STEP = 1, SYN_MAX = 2, SYN_DEN = 4; // 相乗：1台ごとに 1/4（+25%）、2台まで
 
-// blocked：置けないマス（柱など）。rubble：瓦礫のマス（片づけると置ける）
-export const WALL = 1, RUBBLE = 2;
-export function createWorld({ w, h, blocked = [], rubble = [], leyline = true }, data) {
+// blocked：置けないマス（柱など）。rubble：瓦礫のマス（片づけると置ける）。water：水（置けない。下をくぐるベルトは下を通せる）
+export const WALL = 1, RUBBLE = 2, WATER = 3;
+export function createWorld({ w, h, blocked = [], rubble = [], water = [], leyline = true }, data) {
   const world = {
     w, h, data, leyline,
     manaFurnaces: [], consumers: [],
@@ -51,6 +51,7 @@ export function createWorld({ w, h, blocked = [], rubble = [], leyline = true },
   for (const f of FIELDS) world.fields[f] = new Uint8Array(w * h);
   for (const [x, y] of blocked) world.blocked[y * w + x] = WALL;
   for (const [x, y] of rubble) world.blocked[y * w + x] = RUBBLE;
+  for (const [x, y] of water) world.blocked[y * w + x] = WATER;
   return world;
 }
 
@@ -67,7 +68,7 @@ export function canPlace(world, id, x, y) {
       const cx = x + i, cy = y + j;
       if (cx < 0 || cy < 0 || cx >= world.w || cy >= world.h) return { ok: false, reason: '区画の外' };
       const b = world.blocked[cy * world.w + cx];
-      if (b) return { ok: false, reason: b === RUBBLE ? '瓦礫がある' : '置けないマス' };
+      if (b) return { ok: false, reason: b === RUBBLE ? '瓦礫がある' : b === WATER ? '水の上には置けない' : '置けないマス' };
       if (world.grid[cy * world.w + cx]) return { ok: false, reason: 'ほかの物がある' };
     }
   }
@@ -580,10 +581,10 @@ export function backRate(world) {
 
 // 配置だけを取り出す（保存・共有用）。流れている素材は含めない（魔力炉の燃料だけは残す）。
 export function serialize(world) {
-  const blocked = [];
-  world.blocked.forEach((v, i) => { if (v) blocked.push([i % world.w, Math.floor(i / world.w)]); });
+  const blocked = [], water = [];
+  world.blocked.forEach((v, i) => { if (v) (v === WATER ? water : blocked).push([i % world.w, Math.floor(i / world.w)]); });
   return {
-    v: 1, w: world.w, h: world.h, blocked,
+    v: 1, w: world.w, h: world.h, blocked, water,
     ents: world.ents.map((e) => {
       const o = { id: e.id, x: e.x, y: e.y, dir: e.dir };
       if (e.fixed) o.fixed = true;
