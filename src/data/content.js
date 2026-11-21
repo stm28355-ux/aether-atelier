@@ -84,8 +84,8 @@ export const districts = [
     intro: '竜炉の熱は、ベルトを流れる鉱石にも効く。熱の中を3マス進んだ鉱石は溶ける。金属板が熱を通ると赤熱するので気をつける。',
     w: 12, h: 9, walls: [],
     rubble: [
-      { id: 'a', tiles: rect(0, 7, 6, 2) },
-      { id: 'b', tiles: rect(6, 7, 6, 2) },
+      { id: 'a', tiles: rect(0, 6, 12, 1), name: '上の1列' }, // 区1を改善する（鋳型台3台）ときに使う
+      { id: 'b', tiles: rect(0, 7, 12, 2), name: '下の2列' },
     ],
     fixed: [
       { id: 'source', x: 0, y: 4, dir: 0, item: 'ore' },
@@ -141,7 +141,7 @@ export const districts = [
   },
   {
     id: 'd4', name: '区4 からくり工房', sys: '機工', leyline: false,
-    intro: '旋盤は、辺で接する旋盤1台ごとに25%速くなる（ここでは2台まで）。区1の金属板と区2の枠・歯車が倉庫から届く。金属板が足りなければ、区1を改善して倉庫に入る量を増やす（区3の最後の依頼の報酬で、区1の瓦礫が片づいて広くなっている）。',
+    intro: '旋盤は、辺で接する旋盤1台ごとに25%速くなる（2台まで）。ここでは旋盤は3台まで。3台をつなげて並べると、真ん中は左右がふさがる。区1の金属板と区2の枠・歯車が倉庫から届く。金属板が足りなければ、区1を改善して倉庫に入る量を増やす（区3の最後の依頼の報酬で、区1の瓦礫が片づいて広くなっている）。',
     w: 12, h: 10, walls: [],
     rubble: [
       { id: 'a', tiles: rect(0, 8, 6, 2) },
@@ -154,9 +154,9 @@ export const districts = [
       { id: 'source', x: 0, y: 7, dir: 0, item: 'aether' },
       { id: 'sink', x: 11, y: 6, dir: 0 },
     ],
-    base: ['lathe'], recipes: ['gearbox'], limits: { lathe: 2 },
+    base: ['lathe'], recipes: ['gearbox'], limits: { lathe: 3 },
     requests: [
-      { targets: { screw: 75 }, unlock: ['workbench'], reward: 'からくり台（3×3。枠・歯車・ねじから歯車箱。魔力が要る）', clears: [['d2', 'a']] },
+      { targets: { screw: 110 }, unlock: ['workbench'], reward: 'からくり台（3×3。枠・歯車・ねじから歯車箱。魔力が要る）', clears: [['d2', 'a']] },
       { targets: { gearbox: 15 }, unlock: [], opens: 'd5', reward: '次の区画「霜の蔵」', clears: [['d1', 'b']] },
     ],
   },

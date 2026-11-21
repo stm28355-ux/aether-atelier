@@ -83,10 +83,11 @@ test('貼れないとき：ほかの物と重なる、まだ使えない設備�
   const r = pasteCheck(early, 'd0', { w: 2, h: 2, ents: [{ id: 'furnace', x: 0, y: 0, dir: 0 }] }, 3, 0);
   assert.equal(r.ok, false);
   assert.match(r.reason, /まだ使えない設備/);
-  // 台数の上限（区4の旋盤は2台まで。もう2台ある）
-  const lathe = pasteCheck(g, 'd4', { w: 1, h: 1, ents: [{ id: 'lathe', x: 0, y: 0, dir: 0 }] }, 9, 3);
+  // 台数の上限（区4の旋盤は3台まで。もう2台ある）
+  const two = { w: 2, h: 1, ents: [{ id: 'lathe', x: 0, y: 0, dir: 0 }, { id: 'lathe', x: 1, y: 0, dir: 0 }] };
+  const lathe = pasteCheck(g, 'd4', two, 9, 3);
   assert.equal(lathe.ok, false);
-  assert.match(lathe.reason, /2台まで/);
+  assert.match(lathe.reason, /3台まで/);
 });
 
 test('貼ると、図面のレシピ・選り分けの素材・下をくぐるベルトの入口と出口も写る', () => {

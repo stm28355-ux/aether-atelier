@@ -440,7 +440,7 @@ function renderRequests() {
 
 // 瓦礫の呼び方：「区1の瓦礫（左）」
 const shortName = (id) => districtDef(game, id).name.split(' ')[0];
-const patchSide = (patch) => (Math.min(...patch.tiles.map(([x]) => x)) === 0 ? '左' : '右');
+const patchSide = (patch) => patch.name ?? (Math.min(...patch.tiles.map(([x]) => x)) === 0 ? '左' : '右');
 function rubbleName(district, patchId) {
   const patch = districtDef(game, district).rubble.find((p) => p.id === patchId);
   return `${shortName(district)}の瓦礫（${patchSide(patch)}）`;
@@ -863,6 +863,8 @@ $('reset').onclick = () => {
   openDistrict(ui.district);
   if (before && before !== lastSnap) { pushUndo(before); renderEditBar(); }
 };
+// 試作用の「全部開く」は、URL に ?dev を付けたときだけ出す
+if (!new URLSearchParams(location.search).has('dev')) $('openall').style.display = 'none';
 $('openall').onclick = () => {
   for (const d of content.districts) {
     game.state.done[d.id] = d.requests.length;

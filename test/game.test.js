@@ -17,14 +17,17 @@ const part1 = () => fresh({ open: PART1, layouts: { ...FIRST_LAYOUTS } });
 const allOpen = () => fresh({ open: DISTRICTS, layouts: { ...MODEL } });
 
 // はじめから遊ぶ：開いた区画に段ごとのお手本を置き、全部の依頼を達成するまで進める
+// 区1は最初の形で始め、区4が開いて上の1列の瓦礫が片づいたら改善する（鋳型台3台。その1列を使う）
 function playThrough(maxMinutes = 60) {
   const g = createGame(content);
   const applied = {};
   for (let s = 0; s < maxMinutes * 60; s++) {
     for (const id of g.state.open) {
       const st = STAGES[id];
-      const k = Math.min(g.state.done[id] || 0, st.length - 1);
-      if (applied[id] !== k) { setLayout(g, id, st[k]); applied[id] = k; }
+      let k = Math.min(g.state.done[id] || 0, st.length - 1);
+      let layout = st[k];
+      if (id === 'd1' && !(g.state.cleared.d1 || []).includes('a')) { k = 'first'; layout = FIRST.d1; }
+      if (applied[id] !== k) { setLayout(g, id, layout); applied[id] = k; }
     }
     if (DISTRICTS.every((id) => (g.state.done[id] || 0) >= content.districts.find((d) => d.id === id).requests.length)) break;
     run(g, 10);
@@ -33,13 +36,20 @@ function playThrough(maxMinutes = 60) {
 }
 
 test('お手本の配置はすべて置ける（区画が小さすぎない）', () => {
+  // 区1の改善した形だけは、区4が開いて片づく上の1列を使う
+  const cleared = (id, layout) => (id === 'd1' && layout !== FIRST.d1 ? { d1: ['a'] } : {});
   for (const [id, stages] of Object.entries({ ...STAGES, d1: [...STAGES.d1, FIRST.d1], d2: [...STAGES.d2, FIRST.d2] })) {
     const def = content.districts.find((d) => d.id === id);
     stages.forEach((layout, k) => {
-      const g = fresh({ open: [id], layouts: { [id]: layout } });
+      const g = fresh({ open: [id], layouts: { [id]: layout }, cleared: cleared(id, layout) });
       assert.equal(g.worlds[id].ents.length, layout.length + def.fixed.length, `${id} 段${k + 1}`);
     });
   }
+});
+
+test('区1の改善した形（鋳型台3台）は、上の1列の瓦礫が片づくまで置ききれない', () => {
+  const g = fresh({ open: ['d1'], layouts: { d1: MODEL.d1 } });
+  assert.ok(g.worlds.d1.ents.length < MODEL.d1.length + 2);
 });
 
 test('はじめから順に：お手本の配置で全部の依頼が達成でき、2つの大目標が流れ続ける', () => {
@@ -66,15 +76,15 @@ test('第1部は、最初に来たときの形（区1は金属板60、区2は枠
   assert.ok(g.state.open.includes('d4')); // 区3の最後の依頼で区4が開く
 });
 
-test('区4のねじ75は、区1が金属板60のままだと届かない（区2のプレス機と分け合う）。区1を改善すると届く', () => {
+test('区4のねじ110は、区1が金属板60のままだと届かない（区2のプレス機と分け合う）。区1を改善すると届く', () => {
   const make = (d1) => {
     const g = fresh({ open: [...PART1, 'd4'], layouts: { ...FIRST_LAYOUTS, d1, d4: STAGES.d4[0] } });
     run(g, 5 * 60 * 10);
     return g;
   };
   const before = make(FIRST.d1), after = make(MODEL.d1);
-  assert.ok(rate(before.worlds.d4, 'screw') < 75, `改善前 ${rate(before.worlds.d4, 'screw')}`);
-  assert.ok(rate(after.worlds.d4, 'screw') >= 75, `改善後 ${rate(after.worlds.d4, 'screw')}`);
+  assert.ok(rate(before.worlds.d4, 'screw') < 110, `改善前 ${rate(before.worlds.d4, 'screw')}`);
+  assert.ok(rate(after.worlds.d4, 'screw') >= 110, `改善後 ${rate(after.worlds.d4, 'screw')}`);
 });
 
 test('倉庫：前の区画の物は、入ってくる量までしか出せない。残りは余り', () => {
@@ -115,8 +125,8 @@ test('瓦礫：あとの区画の依頼を達成すると、前の区画の瓦�
   assert.deepEqual(g.state.cleared.d0, ['a', 'b']); // 区2の1つ目と3つ目の依頼
   assert.deepEqual(g.state.cleared.d1, ['a']); // 区3の最後の依頼（区4が開く）
   assert.equal(canPlace(g.worlds.d0, 'belt', 0, 7).ok, true);
-  assert.equal(canPlace(g.worlds.d1, 'belt', 0, 7).ok, true);
-  assert.equal(canPlace(g.worlds.d1, 'belt', 6, 7).ok, false); // 区1の右は区4の依頼で片づく
+  assert.equal(canPlace(g.worlds.d1, 'belt', 0, 6).ok, true); // 区1の上の1列
+  assert.equal(canPlace(g.worlds.d1, 'belt', 0, 7).ok, false); // 区1の下の2列は区4の依頼で片づく
 });
 
 test('瓦礫：どの瓦礫も、その区画よりあとの区画の依頼1つで片づく', () => {
