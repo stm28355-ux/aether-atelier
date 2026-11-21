@@ -98,11 +98,12 @@ function renderMap() {
     if (st === 'open' || st === 'done') { card.onclick = () => { location.hash = `#/d/${id}`; }; card.classList.add('click'); }
     grid.append(card);
   }
-  const later = document.createElement('p');
-  later.className = 'hint later';
-  later.innerHTML = TRIAL ? '試作モード：第2部の新しい仕組み（副産物・時間で変わる・光の範囲・増える）を1つずつ試す区画です。本編のセーブとは別です。<a href="./">本編へ戻る</a>'
-    : '<a href="?trial">第2部の新しい仕組みを1つずつ試す（試作モード）</a>';
-  grid.append(later);
+  if (TRIAL) { // 試作モードの中だけ、本編へ戻る道を出す（本編の地図には試作モードへの道を出さない。URL に ?trial で開ける）
+    const later = document.createElement('p');
+    later.className = 'hint later';
+    later.innerHTML = '試作モード：第2部の新しい仕組み（副産物・時間で変わる・光の範囲・増える）を1つずつ試す区画です。本編のセーブとは別です。<a href="./">本編へ戻る</a>';
+    grid.append(later);
+  }
   updateMap();
 }
 
