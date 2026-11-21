@@ -206,7 +206,7 @@ export const districts = [
     id: 'd7', name: '区7 灯台通り', sys: '炉と霜', leyline: false,
     intro: '研磨機に別のレシピが増えた：エーテル結晶1個からレンズ1個（ガラスからより2倍速い）。機械をクリックするとレシピを選べる。',
     w: 13, h: 8, walls: [],
-    rubble: [], // あとの区画（第3部）を作るときに足す
+    rubble: [], // あとの区画（第2部）を作るときに足す
     fixed: [
       { id: 'source', x: 12, y: 0, dir: 2, item: 'aether' },
       { id: 'source', x: 0, y: 1, dir: 0, item: 'glass', imported: true },
@@ -228,7 +228,7 @@ export const districts = [
 // 区画を開いたときに使えるようになるレシピ。ここに出てこないレシピは最初から使える
 export const gatedRecipes = [...new Set(districts.flatMap((d) => d.recipes || []))];
 
-// 地図に出す、まだ作っていない区画（第3部：エーテル・育てる・飛空艇）
+// 地図に出す、まだ作っていない区画（第2部：エーテル・育てる・飛空艇）
 export const upcoming = [];
 
 export default { items, buildings, recipes, fieldRules, districts, upcoming, gatedRecipes };

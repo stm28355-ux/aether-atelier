@@ -78,7 +78,7 @@ function renderMap() {
   }
   const later = document.createElement('p');
   later.className = 'hint later';
-  later.textContent = 'この先（第3部）：エーテル・育てる・飛空艇の系統は、2系統を遊んだあとで作る。';
+  later.textContent = 'ここまでが第1部（機工と炉と霜）。この先の第2部：エーテル・育てる・飛空艇の系統を作っている。';
   grid.append(later);
   updateMap();
 }
