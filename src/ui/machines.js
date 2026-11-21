@@ -3,11 +3,11 @@
 // 向きは絵では回さない（正面の辺は盤面の描画で線と矢印を重ねる）。
 // active：動いているか（竜炉の火、魔力炉の結晶、霜の柱の冷気は、止まっていると暗くなる）
 
-const OUT = '#2b2118';
+export const OUT = '#2b2118';
 export const DOTS = 20; // 1マスのドット数
 
 // 色を明るく（k>0）・暗く（k<0）する
-function shade(hex, k) {
+export function shade(hex, k) {
   const n = parseInt(hex.slice(1), 16);
   const t = k > 0 ? 255 : 0, a = Math.abs(k);
   const f = (v) => Math.round(v + (t - v) * a);
@@ -34,7 +34,7 @@ function pen(ctx, ox, oy, s) {
 }
 
 // 台：縁取り、上と左は明るく、下と右は暗く。wood は板の継ぎ目、rivets は四隅の鋲
-function base(d, gw, gh, body, { wood = false, rivets = false } = {}) {
+export function base(d, gw, gh, body, { wood = false, rivets = false } = {}) {
   d.r(1, 1, gw - 2, gh - 2, OUT);
   d.r(2, 2, gw - 4, gh - 4, body);
   if (wood) {
@@ -54,7 +54,7 @@ function base(d, gw, gh, body, { wood = false, rivets = false } = {}) {
 }
 
 // 歯車：歯を外に並べ、左上に光、真ん中に軸穴
-function gear(d, cx, cy, rad, teeth, color) {
+export function gear(d, cx, cy, rad, teeth, color) {
   const pts = [];
   for (let k = 0; k < teeth; k++) {
     const a = (k / teeth) * Math.PI * 2 + 0.2;
@@ -338,6 +338,9 @@ const ART = {
 };
 
 export const hasArt = (id) => !!ART[id];
+
+// 試し描きのページから、まだ本番に入れていない絵を足す（ゲームでは使わない）
+export function addArt(more) { Object.assign(ART, more); }
 
 // 機械の絵を描く。x, y, w, h は px（1マス＝40px、1ドット＝2px。大きく見せるときは ctx を拡大する）
 export function drawMachineArt(ctx, id, x, y, w, h, active = true) {

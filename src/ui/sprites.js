@@ -34,12 +34,17 @@ function grid(px, rows, pal) {
   });
 }
 
+// 試し描きのページから、まだ本番に入れていない素材の絵を足す：{ id: { rows, pal } }（pal の c は素材の色）
+const EXTRA = {};
+export function addItemArt(more) { Object.assign(EXTRA, more); }
+
 // 素材を描く。cx, cy は中心、size は見た目の大きさ（px）
 export function drawItem(ctx, id, cx, cy, size = 18) {
   const s = Math.max(1, Math.round(size / 16));
   const x0 = Math.round(cx - 8 * s), y0 = Math.round(cy - 8 * s);
   const px = pen(ctx, x0, y0, s);
   const c = ITEM_COLORS[id];
+  if (EXTRA[id]) { grid(px, EXTRA[id].rows, { o: OUT, ...EXTRA[id].pal }); return; }
   switch (id) {
     case 'wood': // 丸太
       grid(px, ['', '', '', '', '....oooooooooo..', '...oBBBBBBBBBroo', '..oBbBBBBbBBrRRo', '..oBBBBbBBBBrRRo', '..oBBBBBBBBBrRRo', '...oooooooooooo.'], { o: OUT, B: c, b: '#6e4620', r: '#c9935a', R: '#e8b880' });
