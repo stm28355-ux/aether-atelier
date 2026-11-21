@@ -11,6 +11,7 @@ import {
 } from '../core/sim.js';
 import { draw, CELL } from './draw.js';
 import { drawItem } from './sprites.js';
+import { drawTown, townHit, TOWN_W, TOWN_H } from './town.js';
 
 const $ = (id) => document.getElementById(id);
 const SAVE_KEY = 'aether-atelier-v1';
@@ -46,7 +47,9 @@ window.addEventListener('hashchange', route);
 document.querySelectorAll('[data-go]').forEach((b) => { b.onclick = () => { location.hash = b.dataset.go; }; });
 
 // ---- 町の地図 ----
-const COLS = { '機工': ['d0', 'd2', 'd4', 'd6'], '炉と霜': ['d1', 'd3', 'd5', 'd7'] };
+// 区画は開く順に並べる（地図の絵も、カードも）
+const ORDER = ['d0', 'd1', 'd2', 'd3', 'd4', 'd5', 'd6', 'd7'];
+let townHover = null;
 function districtState(id) {
   const def = districtDef(game, id);
   if (!def) return 'soon';
@@ -56,27 +59,22 @@ function districtState(id) {
 function renderMap() {
   const grid = $('map-grid');
   grid.replaceChildren();
-  for (const [sys, ids] of Object.entries(COLS)) {
-    const col = document.createElement('div');
-    col.className = 'map-col';
-    col.innerHTML = `<h3>${sys}</h3>`;
-    for (const id of ids) {
-      const def = districtDef(game, id) || content.upcoming.find((u) => u.id === id);
-      const st = districtState(id);
-      const card = document.createElement('div');
-      card.className = `card ${st}`;
-      let body = '';
-      if (st === 'soon') body = '<p class="sub">準備中</p>';
-      else if (st === 'locked') body = '<p class="sub">まだ開いていない</p>';
-      else {
-        const n = game.state.done[id] || 0;
-        body = `<p class="sub">${st === 'done' ? '依頼をすべて達成' : `依頼 ${n}/${def.requests.length}`}</p><canvas class="mini" data-mini="${id}"></canvas><div class="exports" data-exports="${id}"></div>`;
-      }
-      card.innerHTML = `<b>${def.name}</b>${body}`;
-      if (st === 'open' || st === 'done') { card.onclick = () => { location.hash = `#/d/${id}`; }; card.classList.add('click'); }
-      col.append(card);
+  for (const id of ORDER) {
+    const def = districtDef(game, id) || content.upcoming.find((u) => u.id === id);
+    if (!def) continue;
+    const st = districtState(id);
+    const card = document.createElement('div');
+    card.className = `card ${st}`;
+    let body = '';
+    if (st === 'soon') body = '<p class="sub">準備中</p>';
+    else if (st === 'locked') body = '<p class="sub">まだ開いていない</p>';
+    else {
+      const n = game.state.done[id] || 0;
+      body = `<p class="sub">${def.sys}・${st === 'done' ? '依頼をすべて達成' : `依頼 ${n}/${def.requests.length}`}</p><canvas class="mini" data-mini="${id}"></canvas><div class="exports" data-exports="${id}"></div>`;
     }
-    grid.append(col);
+    card.innerHTML = `<b>${def.name}</b>${body}`;
+    if (st === 'open' || st === 'done') { card.onclick = () => { location.hash = `#/d/${id}`; }; card.classList.add('click'); }
+    grid.append(card);
   }
   const later = document.createElement('p');
   later.className = 'hint later';
@@ -84,6 +82,39 @@ function renderMap() {
   grid.append(later);
   updateMap();
 }
+
+// 町の絵：開いた区画・達成した区画・大目標（時計塔の針、街灯と灯台）
+function paintTown() {
+  const c = $('town');
+  const dpr = window.devicePixelRatio || 1;
+  if (c.width !== TOWN_W * dpr) { c.width = TOWN_W * dpr; c.height = TOWN_H * dpr; }
+  const ctx = c.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const gl = Object.fromEntries(goals(game).map((g) => [g.id, g]));
+  drawTown(ctx, {
+    districts: content.districts,
+    open: game.state.open,
+    done: ORDER.filter((id) => districtState(id) === 'done'),
+    clock: !!(gl.clocktower?.reached && gl.clocktower.flowing),
+    clockStopped: !!(gl.clocktower?.reached && !gl.clocktower.flowing),
+    lights: !!(gl.lights?.reached && gl.lights.flowing),
+    hover: townHover,
+    t: game.tick,
+  });
+}
+const townPos = (ev) => { const r = $('town').getBoundingClientRect(); return [(ev.clientX - r.left) * (TOWN_W / r.width), (ev.clientY - r.top) * (TOWN_H / r.height)]; };
+$('town').addEventListener('mousemove', (ev) => {
+  const id = townHit(...townPos(ev));
+  const h = id && game.state.open.includes(id) ? id : null;
+  $('town').style.cursor = h ? 'pointer' : 'default';
+  $('town').title = h ? `${districtDef(game, h).name}へ入る` : '';
+  if (h !== townHover) { townHover = h; paintTown(); }
+});
+$('town').addEventListener('mouseleave', () => { townHover = null; paintTown(); });
+$('town').addEventListener('click', (ev) => {
+  const id = townHit(...townPos(ev));
+  if (id && game.state.open.includes(id)) location.hash = `#/d/${id}`;
+});
 function renderGoals() {
   $('goals').innerHTML = goals(game).map((g) => {
     const want = Object.entries(g.targets).map(([t, n]) => `${dot(t)}${itemName(t)} 毎分${n}`).join('、');
@@ -96,16 +127,17 @@ function renderGoals() {
 }
 function updateMap() {
   renderGoals();
+  paintTown();
   for (const c of document.querySelectorAll('[data-mini]')) {
     const w = game.worlds[c.dataset.mini];
-    const k = 0.25, dpr = window.devicePixelRatio || 1;
+    const k = 0.2, dpr = window.devicePixelRatio || 1;
     if (c.width !== w.w * CELL * k * dpr) {
       c.width = w.w * CELL * k * dpr; c.height = w.h * CELL * k * dpr;
       c.style.width = `${w.w * CELL * k}px`; c.style.height = `${w.h * CELL * k}px`;
     }
     const ctx = c.getContext('2d');
     ctx.setTransform(k * dpr, 0, 0, k * dpr, 0, 0);
-    draw(ctx, w, { alpha: 0 });
+    draw(ctx, w, { alpha: 0, art: 'plain' });
   }
   for (const el of document.querySelectorAll('[data-exports]')) {
     const w = game.worlds[el.dataset.exports];
@@ -920,7 +952,7 @@ function frame(now) {
     draw(canvas.getContext('2d'), world, {
       sel: ui.sel ? selRect(ui.sel) : null,
       paste: po ? { bp: ui.clip, ox: po.ox, oy: po.oy, bad: ui.pasteState.bad, ok: ui.pasteState.ok } : null,
-      tool: ui.tool, dir: ui.dir, hover: ui.hover, alpha: ui.alpha, overLimit,
+      art: 'name', tool: ui.tool, dir: ui.dir, hover: ui.hover, alpha: ui.alpha, overLimit,
       showShake: world.ents.some((e) => buildings[e.id].fragile) || !!(ui.tool && (buildings[ui.tool].fragile || buildings[ui.tool].shake)),
       underRole: ui.tool === 'under' && ui.hover ? underRole(ui.hover.x, ui.hover.y, ui.dir) : null,
       portLabel: () => '受取',

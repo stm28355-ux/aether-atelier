@@ -72,6 +72,22 @@ function gear(d, cx, cy, rad, teeth, color) {
   d.disc(cx, cy, rad * 0.2 + 0.6, OUT);
 }
 
+// 魔力炉の結晶（ひし形）。燃えているときだけ描く
+function drawCrystal(d, cx, cy) {
+  d.disc(cx, cy, 9, '#4a3a8c');
+  const rows = [1, 3, 5, 7, 9, 9, 7, 5, 3, 1];
+  rows.forEach((wdt, i) => {
+    const y = cy - 7 + i, x = Math.round(cx - wdt / 2 - 0.5);
+    d.r(x - 1, y, wdt + 2, 1, OUT);
+  });
+  rows.forEach((wdt, i) => {
+    if (wdt < 3) return;
+    const y = cy - 7 + i, x = Math.round(cx - wdt / 2 + 0.5);
+    d.r(x, y, wdt - 2, 1, '#b9a0ff');
+    if (i < 5) d.r(x, y, Math.max(1, Math.floor((wdt - 2) / 2)), 1, '#efe8ff');
+  });
+}
+
 // ---- 機械ごとの絵 ----
 const ART = {
   // 製材機：板張りの台に、丸のこの刃
@@ -144,19 +160,11 @@ const ART = {
       const x = cx + Math.cos(a) * 13, y = cy + Math.sin(a) * 13;
       d.r(Math.round(x) - 1, Math.round(y) - 1, 2, 2, active ? '#cbb8ff' : '#6e60a0');
     }
-    if (active) d.disc(cx, cy, 9, '#4a3a8c');
-    // 結晶（ひし形）
-    const rows = [1, 3, 5, 7, 9, 9, 7, 5, 3, 1];
-    rows.forEach((wdt, i) => {
-      const y = cy - 7 + i, x = Math.round(cx - wdt / 2 - 0.5);
-      d.r(x - 1, y, wdt + 2, 1, OUT);
-    });
-    rows.forEach((wdt, i) => {
-      if (wdt < 3) return;
-      const y = cy - 7 + i, x = Math.round(cx - wdt / 2 + 0.5);
-      d.r(x, y, wdt - 2, 1, active ? '#b9a0ff' : '#7a6aa8');
-      if (i < 5) d.r(x, y, Math.max(1, Math.floor((wdt - 2) / 2)), 1, active ? '#efe8ff' : '#9a8cc0');
-    });
+    if (!active) { // 止まっているときは結晶がなく、空の台座だけ
+      d.disc(cx, cy, 5.5, OUT);
+      d.disc(cx, cy, 4.5, '#1e1838');
+      d.px(cx - 2, cy - 2, '#3a2f66');
+    } else drawCrystal(d, cx, cy);
     d.r(8, gh - 9, 4, 3, OUT); d.r(gw - 12, gh - 9, 4, 3, OUT); // 燃料の差し口
     d.r(9, gh - 8, 2, 1, '#8a6cf0'); d.r(gw - 11, gh - 8, 2, 1, '#8a6cf0');
   },
@@ -202,6 +210,130 @@ const ART = {
     d.line(13, 47, 17, 43, '#c9d1d9');
     d.r(7, 50, 4, 4, OUT); d.r(8, 51, 2, 2, '#c0392b');
     for (const [x, y] of [[50, 50], [53, 47], [48, 54], [30, 50]]) { d.r(x, y, 2, 2, OUT); d.px(x, y, '#c9d1d9'); } // ねじ
+  },
+
+  // 粉砕機：鉄の枠に、歯のついた2本のローラー。間に砕けた粉
+  crusher(d, gw, gh) {
+    base(d, gw, gh, '#7f848a', { rivets: true });
+    d.r(6, 6, gw - 12, gh - 12, OUT); // 投入口
+    d.r(7, 7, gw - 14, gh - 14, '#3a3d42');
+    for (const x0 of [8, 21]) { // ローラー2本
+      d.r(x0, 8, 11, gh - 16, '#5d636b');
+      d.r(x0, 8, 2, gh - 16, '#9aa1aa');
+      d.r(x0 + 9, 8, 2, gh - 16, '#454a51');
+      for (let y = 9; y < gh - 8; y += 3) d.r(x0 + 1, y, 9, 1, '#2f3237'); // 歯
+    }
+    d.r(19, 8, 2, gh - 16, '#1f2124'); // 噛み合わせ
+    for (const [x, y] of [[19, 12], [20, 18], [19, 25], [20, 29]]) d.px(x, y, '#b9ae9c'); // 粉
+  },
+
+  // 鋳型台：板の形のくぼみが2つ。片方に溶けた鉱石、片方に固まった金属板
+  caster(d, gw, gh) {
+    base(d, gw, gh, '#6d7f94', { rivets: true });
+    d.r(15, 3, 10, 4, OUT); d.r(16, 4, 8, 2, '#ff7a1a'); // 注ぎ口
+    for (const [y, molten] of [[9, true], [23, false]]) {
+      d.r(6, y, gw - 12, 10, OUT);
+      d.r(7, y + 1, gw - 14, 8, '#33404f');
+      if (molten) {
+        d.r(8, y + 2, gw - 16, 6, '#d2400f');
+        d.r(8, y + 2, gw - 16, 2, '#ff7a1a');
+        d.r(10, y + 3, 6, 1, '#ffe08a');
+      } else {
+        d.r(8, y + 2, gw - 16, 6, '#c9d1d9');
+        d.r(8, y + 2, gw - 16, 1, '#eef2f5');
+        d.r(8, y + 7, gw - 16, 1, '#8d98a5');
+      }
+    }
+  },
+
+  // 組立台：板張りの作業台に、組みかけの枠と金槌
+  assembler(d, gw, gh) {
+    base(d, gw, gh, '#8c5e30', { wood: true });
+    d.r(8, 8, 18, 18, OUT); // 枠
+    d.r(9, 9, 16, 16, '#b07a3c');
+    d.r(13, 13, 8, 8, OUT);
+    d.r(14, 14, 6, 6, '#8c5e30');
+    d.r(9, 9, 16, 1, '#e0b97a'); d.r(9, 9, 1, 16, '#e0b97a');
+    for (const [x, y] of [[10, 10], [23, 10], [10, 23], [23, 23]]) d.px(x, y, '#5d6875'); // 釘
+    d.line(26, 32, 33, 25, OUT); d.line(27, 32, 34, 25, OUT); // 金槌の柄
+    d.line(27, 31, 33, 25, '#c9935a');
+    d.r(31, 21, 6, 4, OUT); d.r(32, 22, 4, 2, '#8d98a5');
+  },
+
+  // プレス機：四隅の柱と、黄色と黒の縞の重いおもり
+  press(d, gw, gh) {
+    base(d, gw, gh, '#5f6670');
+    for (const [x, y] of [[7, 7], [gw - 7, 7], [7, gh - 7], [gw - 7, gh - 7]]) { // 柱
+      d.disc(x, y, 4, OUT); d.disc(x, y, 3, '#9aa1aa'); d.disc(x - 0.5, y - 0.5, 1.5, '#d5dae0');
+    }
+    d.r(10, 10, gw - 20, gh - 20, OUT); // おもり
+    for (let i = 0; i < gw - 22; i++) for (let j = 0; j < gh - 22; j++) {
+      const edge = i < 2 || j < 2 || i >= gw - 24 || j >= gh - 24;
+      d.px(11 + i, 11 + j, edge ? ((i + j) % 6 < 3 ? '#e0b440' : '#2b2118') : '#7a828c');
+    }
+    d.r(15, 15, gw - 30, 2, '#9aa1aa');
+    d.disc(gw / 2, gh / 2, 2.5, '#454a51');
+  },
+
+  // 調合台：丸い鉢に白い粉の渦と、かき混ぜる棒
+  mixer(d, gw, gh) {
+    base(d, gw, gh, '#b39a5c', { wood: true });
+    const cx = gw / 2, cy = gh / 2 + 1;
+    d.disc(cx, cy, 13, OUT);
+    d.disc(cx, cy, 12, '#8a7a5a');
+    d.disc(cx, cy, 10, '#5e5240');
+    d.disc(cx, cy, 9, '#e8efe0');
+    for (let a = 0; a < Math.PI * 3.2; a += 0.18) { // 渦
+      const rr = 1.5 + a * 0.75;
+      d.px(Math.round(cx + Math.cos(a) * rr), Math.round(cy + Math.sin(a) * rr), '#b9b2a0');
+    }
+    d.line(cx + 2, cy - 2, cx + 13, cy - 13, OUT); d.line(cx + 3, cy - 2, cx + 14, cy - 13, OUT); // 棒
+    d.line(cx + 3, cy - 3, cx + 13, cy - 13, '#c9935a');
+    for (const [x, y] of [[6, 33], [9, 35], [33, 32]]) d.px(x, y, '#d9c48c'); // 砂粒
+  },
+
+  // 研磨機：回る砥石と、磨いているレンズ
+  polisher(d, gw, gh) {
+    base(d, gw, gh, '#4a7fc0', { rivets: true });
+    d.disc(15, 20, 11, OUT); // 砥石
+    d.disc(15, 20, 10, '#9a9488');
+    d.disc(15, 20, 7, '#b8b2a5');
+    d.disc(15, 20, 6, '#9a9488');
+    for (let k = 0; k < 8; k++) { const a = (k / 8) * Math.PI * 2; d.px(Math.round(15 + Math.cos(a) * 8.5), Math.round(20 + Math.sin(a) * 8.5), '#7a7468'); }
+    d.disc(15, 20, 2.2, OUT);
+    d.disc(29, 22, 6, OUT); // レンズ
+    d.disc(29, 22, 5, '#4aa8e8');
+    d.disc(28, 21, 2.5, '#a8e6f0');
+    d.px(27, 20, '#ffffff');
+    for (const [x, y] of [[24, 13], [26, 11], [23, 30], [34, 14]]) d.px(x, y, '#ffe08a'); // 火花
+  },
+
+  // 蒸留器（1×1）：丸いフラスコに燃料の紫の液、曲がった管
+  still(d, gw, gh) {
+    base(d, gw, gh, '#3f9fb0');
+    d.disc(8, 11, 5.4, OUT);
+    d.disc(8, 11, 4.4, '#d8f4f8');
+    d.disc(8, 12.5, 3.3, '#9b6cf0'); // 底にたまった燃料
+    d.px(6, 9, '#ffffff');
+    d.r(7, 3, 3, 4, OUT); d.r(8, 4, 1, 3, '#d8f4f8'); // 首
+    d.line(10, 4, 15, 9, OUT); d.line(10, 5, 15, 10, '#d8f4f8'); // 管
+    d.r(14, 11, 3, 4, OUT); d.r(15, 12, 1, 2, '#9b6cf0'); // 受け
+  },
+
+  // 巻き機：鋼の帯を巻いたぜんまいと、回すハンドル
+  winder(d, gw, gh) {
+    base(d, gw, gh, '#566a80', { rivets: true });
+    const cx = gw / 2 - 2, cy = gh / 2;
+    d.disc(cx, cy, 13, OUT);
+    d.disc(cx, cy, 12, '#3b4a5a');
+    for (let a = 0; a < Math.PI * 7; a += 0.06) { // 渦巻きの帯
+      const rr = 2 + a * 0.45;
+      if (rr > 11) break;
+      d.px(Math.round(cx + Math.cos(a) * rr), Math.round(cy + Math.sin(a) * rr), '#a7b4c2');
+    }
+    d.disc(cx, cy, 2, '#d5dae0');
+    d.r(cx + 12, cy - 1, 8, 3, OUT); d.r(cx + 12, cy, 7, 1, '#9aa1aa'); // ハンドル
+    d.r(cx + 18, cy - 4, 3, 9, OUT); d.r(cx + 19, cy - 3, 1, 7, '#c0392b');
   },
 };
 

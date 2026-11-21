@@ -227,10 +227,13 @@ function drawArtEnt(ctx, world, e, opts) {
       drawItem(ctx, Object.keys(r.out)[0], ox, oy, 16);
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     }
-    if (e.syn) {
+    if (e.syn) { // 相乗：暗い下地に黄色の字
+      const sy = small ? y + h - 13 : y + h - (band ? 24 : 12);
+      ctx.fillStyle = 'rgba(30,22,16,0.8)';
+      ctx.beginPath(); ctx.roundRect(cx - 12, sy - 5, 24, 10, 3); ctx.fill();
       ctx.fillStyle = '#ffd166';
       ctx.font = '600 8px system-ui, sans-serif';
-      ctx.fillText(`+${e.syn * 25}%`, cx, small ? y + h - 6 : y + h - (band ? 24 : 12));
+      ctx.fillText(`+${e.syn * 25}%`, cx, sy);
     }
     if (r && e.left > 0 && !small) {
       const by = band ? y + h - 19 : y + h - 8;
@@ -361,7 +364,12 @@ export function draw(ctx, world, opts = {}) {
       ctx.strokeRect((x - r) * C + 1, (y - r) * C + 1, (b.w + 2 * r) * C - 2, (b.h + 2 * r) * C - 2);
       ctx.setLineDash([]);
     }
-    ctx.fillStyle = ok ? 'rgba(63,138,77,0.35)' : 'rgba(192,57,43,0.35)';
+    if (opts.art && hasArt(opts.tool)) { // 置く前の影も、薄い絵で
+      ctx.save(); ctx.globalAlpha = 0.55;
+      drawMachineArt(ctx, opts.tool, x * C, y * C, b.w * C, b.h * C, true);
+      ctx.restore();
+    }
+    ctx.fillStyle = ok ? 'rgba(63,138,77,0.3)' : 'rgba(192,57,43,0.35)';
     ctx.fillRect(x * C, y * C, b.w * C, b.h * C);
     ctx.strokeStyle = ok ? '#3f8a4d' : '#c0392b';
     ctx.lineWidth = 2;
