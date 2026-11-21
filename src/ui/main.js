@@ -2,9 +2,11 @@
 import content from '../data/content.js';
 import {
   createGame, step as stepGame, layoutChanged, resetDistrict, unlocked, perMin, startCleanup,
-  districtDef, save,
+  districtDef, save, recipesFor, goals,
 } from '../core/game.js';
-import { place, remove, entAt, rate, rebuild, TPS, DX, DY, UNDER_GAP, FUEL_CAP } from '../core/sim.js';
+import {
+  place, remove, entAt, rate, rebuild, setRecipe, backRate, TPS, DX, DY, UNDER_GAP, FUEL_CAP, SHAKE_RADIUS,
+} from '../core/sim.js';
 import { draw, CELL } from './draw.js';
 import { drawItem } from './sprites.js';
 
@@ -21,7 +23,7 @@ const persist = () => {
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(save(game))); } catch { /* 保存できなくても遊べる */ }
 };
 
-const ui = { screen: 'map', district: null, tool: null, dir: 0, hover: null, alpha: 0, paused: false, speed: 1 };
+const ui = { screen: 'map', district: null, tool: null, dir: 0, hover: null, alpha: 0, paused: false, speed: 1, recipe: {}, filter: null };
 const canvas = $('board');
 
 // ---- 画面の切り替え（#/map, #/book, #/d/区画） ----
@@ -61,7 +63,7 @@ function renderMap() {
       const card = document.createElement('div');
       card.className = `card ${st}`;
       let body = '';
-      if (st === 'soon') body = '<p class="sub">準備中（フェーズ5以降）</p>';
+      if (st === 'soon') body = '<p class="sub">準備中</p>';
       else if (st === 'locked') body = '<p class="sub">まだ開いていない</p>';
       else {
         const n = game.state.done[id] || 0;
@@ -73,9 +75,24 @@ function renderMap() {
     }
     grid.append(col);
   }
+  const later = document.createElement('p');
+  later.className = 'hint later';
+  later.textContent = 'この先（第3部）：エーテル・育てる・飛空艇の系統は、2系統を遊んだあとで作る。';
+  grid.append(later);
   updateMap();
 }
+function renderGoals() {
+  $('goals').innerHTML = goals(game).map((g) => {
+    const want = Object.entries(g.targets).map(([t, n]) => `${dot(t)}${itemName(t)} 毎分${n}`).join('、');
+    const st = !g.open ? '<span class="sub">まだ区画が開いていない</span>'
+      : !g.reached ? `<span class="sub">${districtDef(game, g.district).name}で、${want}を納める</span>`
+        : g.flowing ? `<span class="ok">◎ 流れ続けている</span>（${want}）`
+          : `<span class="warn">止まっている</span>（${want}が足りない）`;
+    return `<div class="goal ${g.reached ? 'reached' : ''}"><b>${g.title}</b><div>${st}</div></div>`;
+  }).join('');
+}
 function updateMap() {
+  renderGoals();
   for (const c of document.querySelectorAll('[data-mini]')) {
     const w = game.worlds[c.dataset.mini];
     const k = 0.25, dpr = window.devicePixelRatio || 1;
@@ -125,6 +142,7 @@ function paintIcons() {
 // ---- 区画 ----
 let def, world;
 function openDistrict(id) {
+  closePicker();
   ui.district = id;
   def = districtDef(game, id);
   world = game.worlds[id];
@@ -149,12 +167,30 @@ function changed() {
   renderPalette();
 }
 
+const TOOL_NOTE = {
+  splitter: '後ろから受けて、正面・左・右に順に出す',
+  under: '入口を置き、同じ向きで前に出口を置く（間は4マスまで）。くぐっている間は範囲が効かない',
+  sorter: '後ろから受けて、選んだ素材だけ左右へ、残りは正面へ。置いてからクリックで素材を選ぶ',
+  overflow: '先が詰まった物を倉庫へ戻す。混ぜたベルトが、余った物で止まらない',
+};
+function buildingNote(id) {
+  const b = buildings[id];
+  const notes = [TOOL_NOTE[id]];
+  if (b.recipes) notes.push(recipesFor(game, id).map((r) => recipeText(r)).join(' ／ '));
+  if (b.field) notes.push({ heat: '熱の範囲を作る', cold: '冷気の範囲を作る（熱と重なると打ち消す）', mana: '燃料を燃やして魔力の範囲を作る' }[b.field]);
+  if (b.synergy) notes.push('辺で接する同じ機械1台ごとに25%速い（2台まで）');
+  if (b.shake) notes.push('揺れる（周り2マスのからくり台は止まる）');
+  if (b.fragile) notes.push('揺れる機械から2マス以内だと止まる');
+  if (b.mana && def.leyline === false) notes.push('魔力が要る');
+  return notes.filter(Boolean).join('。');
+}
 function renderPalette() {
   $('palette').replaceChildren(...placeable().map((id, i) => {
     const b = buildings[id];
     const el = document.createElement('button');
+    el.title = buildingNote(id);
     const lim = def.limits[id] != null ? `　${countOf(id)}/${def.limits[id]}` : '';
-    const mana = b.mana && def.leyline === false ? '・魔力' : '';
+    const mana = (b.mana && def.leyline === false ? '・魔力' : '') + (b.shake ? '・揺れる' : '') + (b.synergy ? '・相乗' : '');
     el.innerHTML = `<span>${i + 1}. ${b.name}</span><small>${b.kind === 'under' ? '入口と出口' : `${b.w}×${b.h}`}${mana}${lim}</small>`;
     el.className = ui.tool === id ? 'on' : '';
     el.disabled = overLimit(id);
@@ -163,6 +199,11 @@ function renderPalette() {
   }));
 }
 
+function recipeText(id) {
+  const r = content.recipes[id];
+  const io = (o) => Object.entries(o).map(([k, n]) => `${itemName(k)}${n > 1 ? n : ''}`).join('＋');
+  return `${io(r.in)} → ${io(r.out)}`;
+}
 function reqText(r) {
   return Object.entries(r.targets).map(([t, n]) => `${itemName(t)}を毎分${n}`).join('と') + '、納める';
 }
@@ -207,6 +248,8 @@ function updateDistrictPanels() {
   }
   const rows = Object.keys(items).filter((t) => world.delivered[t])
     .map((t) => `<div class="row"><span>${dot(t)}${itemName(t)}</span><span>${rate(world, t)}</span></div>`);
+  const back = backRate(world);
+  if (back) rows.push(`<div class="row sub"><span>あふれ口から倉庫へ戻した</span><span>${back}</span></div>`);
   $('rates').innerHTML = rows.join('') || '<div class="row"><span class="sub">まだ何も納めていない</span></div>';
   const ports = world.ents.filter((e) => e.kind === 'source' && e.imported);
   $('imports-box').style.display = ports.length ? '' : 'none';
@@ -234,12 +277,58 @@ function handleEvents() {
     const ev = game.events.shift();
     const d = districtDef(game, ev.district);
     if (ev.type === 'request') toast(`${d.name}：依頼達成！<br>報酬：${ev.request.reward}`);
+    if (ev.type === 'goal') showGoal(ev.request.goal, ev.request.reward);
     if (ev.type === 'cleared') toast(`${d.name}：瓦礫を片づけた。置ける場所が広がった`);
     persist();
     if (ui.screen === 'district') { renderPalette(); renderRequests(); renderRubble(); }
     if (ui.screen === 'map') renderMap();
   }
 }
+
+function showGoal(goal, reward) {
+  $('goal-title').textContent = `大目標「${goal.title}」`;
+  $('goal-story').textContent = goal.story;
+  $('goal-reward').textContent = reward.includes('次の区画') ? reward.replace(/^.*?、/, '') : '';
+  $('goal').classList.add('show');
+}
+$('goal-close').onclick = () => $('goal').classList.remove('show');
+
+// ---- レシピ・選り分けの素材を選ぶ小さな窓 ----
+let picking = null;
+function closePicker() { picking = null; $('picker').classList.remove('show'); }
+function openPicker(e, ev) {
+  const box = $('picker');
+  let html = '';
+  if (e.kind === 'sorter') {
+    const known = Object.keys(items).filter((t) => game.state.seen?.[t] || game.state.made?.[t]);
+    html = '<div class="pk-t">左右へ出す素材を選ぶ</div><div class="pk-items">'
+      + known.map((t) => `<button data-filter="${t}" class="${e.filter === t ? 'on' : ''}" title="${itemName(t)}">${dot(t)}${itemName(t)}</button>`).join('')
+      + `</div><button data-filter="" class="${e.filter ? '' : 'on'}">選ばない（全部正面へ）</button>`;
+  } else {
+    html = `<div class="pk-t">${buildings[e.id].name}のレシピ</div>`
+      + recipesFor(game, e.id).map((r) => {
+        const rr = content.recipes[r];
+        return `<button data-recipe="${r}" class="${e.recipe === r ? 'on' : ''}">${recipeText(r)}<small>　毎分${(600 / rr.ticks) * Object.values(rr.out)[0]}${rr.alt ? '・別レシピ' : ''}</small></button>`;
+      }).join('');
+  }
+  box.innerHTML = html;
+  box.style.left = `${Math.min(ev.clientX + 8, window.innerWidth - 280)}px`;
+  box.style.top = `${Math.min(ev.clientY + 8, window.innerHeight - 260)}px`;
+  box.classList.add('show');
+  picking = e;
+  paintIcons();
+  for (const b of box.querySelectorAll('[data-filter]')) {
+    b.onclick = () => { if (picking) { picking.filter = b.dataset.filter || null; ui.filter = picking.filter; changed(); } closePicker(); };
+  }
+  for (const b of box.querySelectorAll('[data-recipe]')) {
+    b.onclick = () => {
+      if (picking && picking.recipe !== b.dataset.recipe) { setRecipe(world, picking, b.dataset.recipe); ui.recipe[picking.id] = b.dataset.recipe; changed(); }
+      closePicker();
+    };
+  }
+}
+const choosable = (e) => e && !e.fixed && (e.kind === 'sorter' || (e.kind === 'machine' && recipesFor(game, e.id).length > 1));
+window.addEventListener('mousedown', (ev) => { if (picking && !$('picker').contains(ev.target)) closePicker(); }, true);
 
 // ---- 操作 ----
 function tileAt(ev) {
@@ -285,13 +374,25 @@ canvas.addEventListener('mousedown', (ev) => {
     else if (ui.tool) { ui.tool = null; renderPalette(); } else drag = { erase: true };
     return;
   }
-  if (ev.button !== 0 || !ui.tool) return;
+  if (ev.button !== 0) return;
+  if (!ui.tool) {
+    const e = entAt(world, t.x, t.y);
+    if (choosable(e)) openPicker(e, ev);
+    return;
+  }
   if (ui.tool === 'belt') {
     drag = { x: t.x, y: t.y };
     putBelt(t.x, t.y, ui.dir);
     changed();
-  } else if (!overLimit(ui.tool) && place(world, ui.tool, t.x, t.y, ui.dir, ui.tool === 'under' ? { role: underRole(t.x, t.y, ui.dir) } : {})) {
+  } else if (!overLimit(ui.tool)) {
+    const props = {};
+    if (ui.tool === 'under') props.role = underRole(t.x, t.y, ui.dir);
+    if (ui.tool === 'sorter') props.filter = ui.filter;
+    if (ui.recipe[ui.tool] && recipesFor(game, ui.tool).includes(ui.recipe[ui.tool])) props.recipe = ui.recipe[ui.tool];
+    const e = place(world, ui.tool, t.x, t.y, ui.dir, props);
+    if (!e) return;
     changed();
+    if (e.kind === 'sorter' && !e.filter) openPicker(e, ev); // 置いたらすぐ素材を選ぶ
     if (overLimit(ui.tool)) { ui.tool = null; renderPalette(); }
   }
 });
@@ -321,7 +422,7 @@ window.addEventListener('keydown', (ev) => {
   if (ev.key === ' ') { ev.preventDefault(); setPaused(!ui.paused); return; }
   if (ui.screen !== 'district') return;
   if (ev.key === 'r' || ev.key === 'R') rotate();
-  else if (ev.key === 'q' || ev.key === 'Q' || ev.key === 'Escape') { ui.tool = null; renderPalette(); }
+  else if (ev.key === 'q' || ev.key === 'Q' || ev.key === 'Escape') { closePicker(); ui.tool = null; renderPalette(); }
   else if (ev.key === 'Delete' && ui.hover) removeAt(ui.hover);
   else if (/^[1-9]$/.test(ev.key)) {
     const id = placeable()[Number(ev.key) - 1];
@@ -355,6 +456,7 @@ const STATUS = {
   working: '動いている', waiting: '材料待ち', blocked: '出口が詰まっている', 'no-field': '範囲の外', 'no-recipe': 'レシピなし',
   'no-mana': '魔力炉の範囲の外なので止まっている（機械の全部のマスを紫の点の中に入れる）',
   'no-fuel': '魔力炉に燃料がないので止まっている（燃料をベルトで魔力炉へ運ぶ）',
+  shaken: `揺れの範囲に入っているので止まっている（揺れる機械から${SHAKE_RADIUS}マスより離す）`,
 };
 const FIELD_TEXT = {
   heat: '周りに熱の範囲を作る。熱の中を3マス進んだ鉱石は溶け、金属板は赤熱する。ガラスの素は5マスでガラスになる',
@@ -364,7 +466,7 @@ function emitterInfo(e) {
   const b = buildings[e.id];
   if (b.field !== 'mana') {
     let s = `：${FIELD_TEXT[b.field]}`;
-    if (e.needsMana) s += e.on ? '｜魔力が届いている' : `｜${STATUS[e.suppliers?.length ? 'no-fuel' : 'no-mana']}`;
+    if (e.needsMana) s += e.on ? '｜魔力が届いている' : `｜${STATUS[e.covered ? 'no-fuel' : 'no-mana']}`;
     return s;
   }
   if (world.leyline) return '：この区画は地脈があるので、魔力は要らない';
@@ -387,7 +489,14 @@ function updateInfo() {
       const io = (o) => Object.entries(o).map(([k, n]) => `${itemName(k)}${n > 1 ? n : ''}`).join('＋');
       s += `：${io(r.in)} → ${io(r.out)}（毎分${(600 / r.ticks) * Object.values(r.out)[0]}個）｜${STATUS[e.status]}`;
       if (e.slow && e.status === 'working') s += `（魔力不足で ${e.pn}/${e.pd} の速さ）`;
-    } else if (e.kind === 'source') s += e.imported ? `：${itemName(e.item)}（前の区画から。倉庫に入る量まで）` : `：${itemName(e.item)}（毎分120個まで）`;
+      if (e.syn) s += `｜相乗 +${e.syn * 25}%（隣の${buildings[e.id].name}）`;
+      else if (buildings[e.id].synergy) s += `｜同じ${buildings[e.id].name}と辺で接すると速くなる`;
+      if (buildings[e.id].shake) s += '｜揺れる';
+      if (choosable(e)) s += '｜クリックでレシピを選ぶ';
+    } else if (e.kind === 'source' && e.extra) s += `：${itemName(e.item)}（前の区画から）と${itemName(e.extra)}が交互に出る`;
+    else if (e.kind === 'source') s += e.imported ? `：${itemName(e.item)}（前の区画から。倉庫に入る量まで）` : `：${itemName(e.item)}（毎分120個まで）`;
+    else if (e.kind === 'sorter') s += `：${e.filter ? `${itemName(e.filter)}だけ左右へ、残りは正面へ` : 'まだ素材を選んでいない（全部正面へ）'}｜クリックで素材を選ぶ`;
+    else if (e.kind === 'overflow') s += '：先が詰まった物を倉庫へ戻す（余った物で止まらない）';
     else if (e.kind === 'emitter') s += emitterInfo(e);
     else if (e.kind === 'under') s += underInfo(e);
     else if (e.item) s += `：${itemName(e.item.t)}`;
@@ -420,6 +529,7 @@ function frame(now) {
     const cleanupTiles = c && c.district === ui.district ? def.rubble.find((r) => r.id === c.patch)?.tiles : null;
     draw(canvas.getContext('2d'), world, {
       tool: ui.tool, dir: ui.dir, hover: ui.hover, alpha: ui.alpha, overLimit, cleanupTiles,
+      showShake: world.ents.some((e) => buildings[e.id].fragile) || !!(ui.tool && (buildings[ui.tool].fragile || buildings[ui.tool].shake)),
       underRole: ui.tool === 'under' && ui.hover ? underRole(ui.hover.x, ui.hover.y, ui.dir) : null,
       portLabel: () => '受取',
     });

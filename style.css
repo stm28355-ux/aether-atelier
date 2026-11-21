@@ -71,3 +71,24 @@ canvas.ico { display: inline-block; width: 16px; height: 16px; vertical-align: -
 .entry p { margin: 4px 0 0; font-size: 13px; }
 .entry.unknown { opacity: 0.6; }
 #rubble button { margin-top: 6px; }
+
+/* フェーズ5：大目標・選ぶ窓 */
+#goals .goal { background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; margin-bottom: 6px; font-size: 13px; }
+#goals .goal.reached { border-color: var(--ok); }
+#goals .goal b { display: block; }
+.ok { color: var(--ok); font-weight: 600; }
+.warn { color: #c0392b; font-weight: 600; }
+.later { grid-column: 1 / -1; text-align: center; }
+#picker { position: fixed; z-index: 20; display: none; width: 270px; max-height: 320px; overflow: auto; background: var(--panel); border: 1px solid var(--accent); border-radius: 10px; padding: 8px; box-shadow: 0 6px 20px rgba(0,0,0,0.18); }
+#picker.show { display: block; }
+#picker .pk-t { font-size: 12px; color: var(--sub); margin-bottom: 4px; }
+#picker button { display: block; width: 100%; text-align: left; margin-bottom: 4px; font-size: 13px; }
+#picker button small { color: var(--sub); }
+#picker button.on small { color: #ffe3cf; }
+#picker .pk-items { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin-bottom: 4px; }
+#picker .pk-items button { margin: 0; padding: 3px 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#goal { position: fixed; inset: 0; z-index: 30; display: none; align-items: center; justify-content: center; background: rgba(43,33,24,0.45); }
+#goal.show { display: flex; }
+#goal .goal-box { background: var(--panel); border: 2px solid #e0b440; border-radius: 14px; padding: 22px 28px; max-width: 420px; text-align: center; box-shadow: 0 10px 40px rgba(0,0,0,0.3); }
+#goal h2 { font-size: 20px; color: var(--ink); margin: 4px 0 10px; }
+#goal p { margin: 0 0 10px; }

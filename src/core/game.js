@@ -6,7 +6,7 @@
 //   1つの口にためられるのは PORT_CAP 個まで（貯めて一気に出せない）
 // - 受け取る口がない分は「余り」。瓦礫を片づけている間は、その素材の余りが片づけに回る
 import {
-  createWorld, place, step as stepWorld, rate, serialize, rebuild, clearTiles, TPS,
+  createWorld, place, remove, step as stepWorld, rate, serialize, rebuild, clearTiles, TPS,
 } from './sim.js';
 
 export const PORT_CAP = 3;
@@ -34,6 +34,13 @@ export function createGame(content, saved = null) {
     events: [], // 画面に知らせること（依頼達成など）
   };
   game.cur = newBucket();
+  // 区画が後から増えたとき：達成済みの依頼が開くはずの区画を開く（古いセーブのため）
+  for (const d of content.districts) {
+    d.requests.slice(0, state.done[d.id] || 0).forEach((r) => {
+      if (r.opens && !state.open.includes(r.opens) && content.districts.some((x) => x.id === r.opens)) state.open.push(r.opens);
+    });
+  }
+  state.open = state.open.filter((id) => content.districts.some((d) => d.id === id));
   for (const id of state.open) buildWorld(game, id);
   return game;
 }
@@ -59,6 +66,7 @@ function buildWorld(game, id) {
   for (const o of game.state.layouts[id] || []) place(world, o.id, o.x, o.y, o.dir, o);
   rebuild(world);
   game.worlds[id] = world;
+  game.ports = null; // 受け取る口を数え直す
   return world;
 }
 
@@ -73,6 +81,24 @@ export function resetDistrict(game, id) {
   buildWorld(game, id);
 }
 
+// 区画の配置をまとめて置き換える（お手本の配置・図面の共有用）。
+// 同じ物が同じ場所にあれば残す（動いている素材や燃料はそのまま）。違う物だけ壊して置き直す
+export function setLayout(game, id, layout) {
+  const w = game.worlds[id];
+  if (!w) { game.state.layouts[id] = layout.map((o) => ({ ...o })); buildWorld(game, id); return; }
+  const B = game.content.buildings;
+  const key = (o) => [o.id, o.x, o.y, o.dir & 3, o.recipe ?? B[o.id].recipes?.[0] ?? '', o.role ?? '', o.filter ?? ''].join(',');
+  const want = new Map(layout.map((o) => [key(o), o]));
+  for (const e of [...w.ents]) {
+    if (e.fixed) continue;
+    const k = key(e);
+    if (want.has(k)) want.delete(k); else remove(w, e.x, e.y);
+  }
+  for (const o of want.values()) place(w, o.id, o.x, o.y, o.dir, o);
+  layoutChanged(game, id);
+  game.ports = null;
+}
+
 // 今使える建物：開いた区画の base と、達成した依頼の報酬
 export function unlocked(game) {
   const list = [];
@@ -80,6 +106,28 @@ export function unlocked(game) {
     if (!game.state.open.includes(d.id)) continue;
     for (const b of d.base) if (!list.includes(b)) list.push(b);
     d.requests.slice(0, game.state.done[d.id] || 0).forEach((r) => r.unlock.forEach((b) => { if (!list.includes(b)) list.push(b); }));
+  }
+  return list;
+}
+
+// 機械で選べるレシピ：区画を開くと増えるレシピ（gatedRecipes）は、その区画が開いているときだけ
+export function recipesFor(game, buildingId) {
+  const { buildings, districts, gatedRecipes = [] } = game.content;
+  const open = new Set(districts.filter((d) => game.state.open.includes(d.id)).flatMap((d) => d.recipes || []));
+  return (buildings[buildingId].recipes || []).filter((r) => !gatedRecipes.includes(r) || open.has(r));
+}
+
+// 大目標：達成したか、今も流れているか
+export function goals(game) {
+  const list = [];
+  for (const d of game.content.districts) {
+    d.requests.forEach((r, i) => {
+      if (!r.goal) return;
+      const w = game.worlds[d.id];
+      const reached = (game.state.done[d.id] || 0) > i;
+      const flowing = !!w && Object.entries(r.targets).every(([t, n]) => rate(w, t) >= n);
+      list.push({ ...r.goal, district: d.id, targets: r.targets, reached, flowing, open: game.state.open.includes(d.id) });
+    });
   }
   return list;
 }
@@ -144,7 +192,7 @@ function checkRequests(game, id) {
     game.state.open.push(r.opens);
     buildWorld(game, r.opens);
   }
-  game.events.push({ type: 'request', district: id, index: k, request: r });
+  game.events.push({ type: r.goal ? 'goal' : 'request', district: id, index: k, request: r });
 }
 
 function checkCleanup(game) {
@@ -204,5 +252,6 @@ export function run(game, ticks) {
 }
 
 export function save(game) {
+  for (const id of game.state.open) if (game.worlds[id]) layoutChanged(game, id); // 魔力炉の燃料も写す
   return JSON.parse(JSON.stringify(game.state));
 }

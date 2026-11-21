@@ -1,11 +1,11 @@
 // 盤面を canvas に描く。素材は試し描きの絵（sprites.js）、機械は色の家族。
-import { DX, DY, BELT_TICKS, WALL, RUBBLE, canPlace, fieldActive } from '../core/sim.js';
+import { DX, DY, BELT_TICKS, WALL, RUBBLE, SHAKE_RADIUS, canPlace, isHolder } from '../core/sim.js';
 import { drawItem, MACHINE_STYLE, FIELD_TINT } from './sprites.js';
 
 export const CELL = 40;
 const C = CELL;
-const LAMP = { working: '#3f8a4d', waiting: '#d9a514', blocked: '#c0392b', 'no-field': '#c0392b', 'no-recipe': '#999', 'no-mana': '#c0392b', 'no-fuel': '#c0392b' };
-const LABEL = { waiting: '材料待ち', blocked: '出口づまり', 'no-field': '範囲の外', 'no-mana': '魔力の範囲外', 'no-fuel': '魔力炉が空' };
+const LAMP = { working: '#3f8a4d', waiting: '#d9a514', blocked: '#c0392b', 'no-field': '#c0392b', 'no-recipe': '#999', 'no-mana': '#c0392b', 'no-fuel': '#c0392b', shaken: '#c0392b' };
+const LABEL = { waiting: '材料待ち', blocked: '出口づまり', 'no-field': '範囲の外', 'no-mana': '魔力の範囲外', 'no-fuel': '魔力炉が空', shaken: '揺れで止まる' };
 
 function lamp(ctx, x, y, color) {
   ctx.fillStyle = color;
@@ -27,7 +27,18 @@ function drawUnder(ctx, e, role, ghost) {
   arrow(ctx, cx - DX[d] * 4, cy - DY[d] * 4, e.dir, 8, ghost ? '#2b2118' : '#efe9de');
   if (!ghost && !e.partner) { ctx.strokeStyle = '#c0392b'; ctx.lineWidth = 2; ctx.strokeRect(x + 2, y + 2, C - 4, C - 4); }
 }
-const RANGE = { heat: ['rgba(255,110,30,0.18)', '#d2571a'], cold: ['rgba(60,150,255,0.18)', '#2f7fd0'], mana: ['rgba(140,90,230,0.12)', '#7a4fd8'] };
+const RANGE = { heat: ['rgba(255,110,30,0.18)', '#d2571a'], cold: ['rgba(60,150,255,0.18)', '#2f7fd0'], mana: ['rgba(140,90,230,0.12)', '#7a4fd8'], shake: ['rgba(90,80,70,0.10)', '#6b5f52'] };
+
+// 揺れの範囲：斜めの細い線
+function hatch(ctx, x, y) {
+  ctx.save();
+  ctx.beginPath(); ctx.rect(x * C, y * C, C, C); ctx.clip();
+  ctx.strokeStyle = 'rgba(95,80,60,0.30)'; ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  for (let k = -C; k < C; k += 9) { ctx.moveTo(x * C + k, y * C + C); ctx.lineTo(x * C + k + C, y * C); }
+  ctx.stroke();
+  ctx.restore();
+}
 
 function arrow(ctx, cx, cy, dir, size, color) {
   ctx.save();
@@ -72,6 +83,23 @@ function drawEnt(ctx, world, e, opts) {
     ctx.fillStyle = '#5f7391';
     ctx.fillRect(x + 1, y + 1, C - 2, C - 2);
     for (const d of [e.dir, (e.dir + 3) & 3, (e.dir + 1) & 3]) arrow(ctx, cx + DX[d] * 11, cy + DY[d] * 11, d, 6, '#dfe7f2');
+  } else if (e.kind === 'sorter') {
+    // 選り分け：真ん中に選んだ素材、左右に黄色の矢印（選んだ物）、正面に白の矢印（残り）
+    ctx.fillStyle = '#6a5a86';
+    ctx.fillRect(x + 1, y + 1, C - 2, C - 2);
+    arrow(ctx, cx + DX[e.dir] * 13, cy + DY[e.dir] * 13, e.dir, 6, '#efe9f7');
+    for (const d of [(e.dir + 3) & 3, (e.dir + 1) & 3]) arrow(ctx, cx + DX[d] * 13, cy + DY[d] * 13, d, 6, '#ffd166');
+    if (e.filter) drawItem(ctx, e.filter, cx, cy, 16);
+    else { ctx.fillStyle = '#efe9f7'; ctx.font = '600 13px system-ui, sans-serif'; ctx.fillText('？', cx, cy); }
+  } else if (e.kind === 'overflow') {
+    // あふれ口：ベルトの先に、倉庫へ戻す口（暗い穴）
+    ctx.fillStyle = '#9b958c';
+    ctx.fillRect(x + 1, y + 1, C - 2, C - 2);
+    ctx.fillStyle = '#b5541c';
+    ctx.beginPath(); ctx.arc(cx - DX[e.dir] * 9, cy - DY[e.dir] * 9, 6, 0, 7); ctx.fill();
+    ctx.fillStyle = '#3b352e';
+    ctx.beginPath(); ctx.arc(cx - DX[e.dir] * 9, cy - DY[e.dir] * 9, 3, 0, 7); ctx.fill();
+    arrow(ctx, cx + DX[e.dir] * 6, cy + DY[e.dir] * 6, e.dir, 9, '#c9c3b8');
   } else if (e.kind === 'source' || e.kind === 'sink') {
     ctx.fillStyle = e.imported ? '#3d4a63' : '#4a4036';
     ctx.fillRect(x + 1, y + 1, C - 2, C - 2);
@@ -79,8 +107,9 @@ function drawEnt(ctx, world, e, opts) {
     ctx.font = '600 11px system-ui, sans-serif';
     if (e.kind === 'source') {
       ctx.fillText(e.imported ? (opts.portLabel?.(e) ?? '受取') : '出す', cx, y + 9);
-      drawItem(ctx, e.item, cx - 5, cy + 6, 16);
-      arrow(ctx, cx + 12, cy + 6, e.dir, 7, '#f4efe6');
+      if (e.extra) { drawItem(ctx, e.item, cx - 9, cy + 6, 16); drawItem(ctx, e.extra, cx + 4, cy + 6, 16); }
+      else drawItem(ctx, e.item, cx - 5, cy + 6, 16);
+      if (!e.extra) arrow(ctx, cx + 12, cy + 6, e.dir, 7, '#f4efe6');
       if (e.imported) {
         for (let i = 0; i < e.credit; i++) { ctx.fillStyle = '#ffd166'; ctx.fillRect(x + 4, y + C - 8 - i * 5, 3, 3); }
       }
@@ -106,7 +135,7 @@ function drawEnt(ctx, world, e, opts) {
       if (e.fuelIn) {
         ctx.fillText(on ? '燃えている' : idle ? '待っている' : '燃料なし', cx, cy + 9);
         for (let i = 0; i < e.fuel; i++) { ctx.fillStyle = '#ffd166'; ctx.fillRect(x + w - 10, y + 6 + i * 6, 4, 4); }
-      } else if (!on) ctx.fillText(e.suppliers?.length ? LABEL['no-fuel'] : LABEL['no-mana'], cx, cy + 9);
+      } else if (!on) ctx.fillText(e.covered ? LABEL['no-fuel'] : LABEL['no-mana'], cx, cy + 9);
     }
     if (e.kind === 'machine') {
       frontEdge(ctx, e, '#fff3d6');
@@ -117,6 +146,13 @@ function drawEnt(ctx, world, e, opts) {
         ctx.fillStyle = '#fff';
         ctx.font = '11px system-ui, sans-serif';
         ctx.fillText(label, cx, cy + 9);
+      }
+      if (e.syn) { // 相乗：隣の同じ機械の数だけ速い
+        ctx.fillStyle = '#ffd166';
+        ctx.font = '600 8px system-ui, sans-serif';
+        ctx.textAlign = 'right';
+        ctx.fillText(`+${e.syn * 25}%`, x + w - 4, y + 9);
+        ctx.textAlign = 'center';
       }
       const r = data.recipes[e.recipe];
       if (r && e.left > 0) {
@@ -153,7 +189,7 @@ function drawRubble(ctx, x, y, hot) {
   ctx.beginPath(); ctx.arc(x * C + 18, y * C + 24, 3, 0, 7); ctx.fill();
 }
 
-// opts：tool, dir, hover, alpha, overLimit(id), cleanupTiles（片づけ中の瓦礫のマス）, portLabel(e)
+// opts：tool, dir, hover, alpha, overLimit(id), cleanupTiles（片づけ中の瓦礫のマス）, portLabel(e), showShake（揺れの範囲を見せる）
 export function draw(ctx, world, opts = {}) {
   const W = world.w * C, H = world.h * C;
   ctx.clearRect(0, 0, W, H);
@@ -172,6 +208,7 @@ export function draw(ctx, world, opts = {}) {
     if (h && c) { ctx.fillStyle = 'rgba(120,120,120,0.22)'; ctx.fillRect(x * C, y * C, C, C); }
     else if (h) { ctx.fillStyle = FIELD_TINT.heat; ctx.fillRect(x * C, y * C, C, C); }
     else if (c) { ctx.fillStyle = FIELD_TINT.cold; ctx.fillRect(x * C, y * C, C, C); }
+    if (opts.showShake && world.fields.shake[i]) hatch(ctx, x, y);
     if (world.fields.mana[i]) {
       ctx.fillStyle = '#8a5ae6';
       for (const [dx, dy] of [[4, 4], [C - 7, 4], [4, C - 7], [C - 7, C - 7]]) ctx.fillRect(x * C + dx, y * C + dy, 3, 3);
@@ -198,15 +235,15 @@ export function draw(ctx, world, opts = {}) {
   ctx.setLineDash([]);
 
   for (const e of world.ents) drawEnt(ctx, world, e, opts);
-  for (const e of world.ents) if ((e.kind === 'belt' || e.kind === 'splitter' || e.kind === 'under') && e.item) drawItemOnBelt(ctx, e, opts.alpha || 0);
+  for (const e of world.ents) if (isHolder(e) && e.item) drawItemOnBelt(ctx, e, opts.alpha || 0);
 
   if (opts.tool && opts.hover) {
     const b = world.data.buildings[opts.tool];
     const { x, y } = opts.hover;
     const ok = canPlace(world, opts.tool, x, y).ok && !opts.overLimit?.(opts.tool);
-    if (b.kind === 'emitter') {
-      const r = b.radius;
-      const [fill, line] = RANGE[b.field];
+    if (b.kind === 'emitter' || b.shake) {
+      const r = b.shake ? SHAKE_RADIUS : b.radius;
+      const [fill, line] = RANGE[b.shake ? 'shake' : b.field];
       ctx.fillStyle = fill;
       ctx.fillRect((x - r) * C, (y - r) * C, (b.w + 2 * r) * C, (b.h + 2 * r) * C);
       ctx.strokeStyle = line;
@@ -225,6 +262,6 @@ export function draw(ctx, world, opts = {}) {
       ctx.fillStyle = '#2b2118'; ctx.font = '600 11px system-ui, sans-serif'; ctx.textAlign = 'center';
       ctx.fillText(opts.underRole === 'out' ? '出口' : '入口', x * C + C / 2, y * C - 7);
     } else if (b.kind === 'machine') frontEdge(ctx, ghost, '#2b2118');
-    else if (b.kind === 'belt' || b.kind === 'splitter') arrow(ctx, x * C + C / 2, y * C + C / 2, opts.dir, 10, '#2b2118');
+    else if (b.kind === 'belt' || b.kind === 'splitter' || b.kind === 'sorter' || b.kind === 'overflow') arrow(ctx, x * C + C / 2, y * C + C / 2, opts.dir, 10, '#2b2118');
   }
 }
