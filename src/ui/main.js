@@ -89,7 +89,7 @@ function renderMap() {
   const later = document.createElement('p');
   later.className = 'hint later';
   later.innerHTML = TRIAL ? '試作モード：第2部の新しい仕組み（副産物・時間で変わる・光の範囲・増える）を1つずつ試す区画です。本編のセーブとは別です。<a href="./">本編へ戻る</a>'
-    : '第2部の育てる（区11〜13）と飛空艇（区14・15）は作っているところ。<a href="?trial">第2部の新しい仕組みを試す（試作モード）</a>';
+    : '第2部の飛空艇（区14・15）は作っているところ。<a href="?trial">第2部の新しい仕組みを試す（試作モード）</a>';
   grid.append(later);
   updateMap();
 }
@@ -499,7 +499,9 @@ function updateDistrictPanels() {
   $('rates').innerHTML = rows.join('') || '<div class="row"><span class="sub">まだ何も納めていない</span></div>';
   const ports = world.ents.filter((e) => e.kind === 'source' && e.imported);
   $('imports-box').style.display = ports.length ? '' : 'none';
-  $('imports').innerHTML = ports.map((p) => `<div class="row"><span>${dot(p.item)}${itemName(p.item)}</span><span>倉庫に入る ${perMin(game, 'in', p.item)}</span></div>`).join('')
+  $('imports').innerHTML = ports.map((p) => (p.from
+    ? `<div class="row"><span>${dot(p.item)}${itemName(p.item)}（${districtDef(game, p.from).name.split(' ')[0]}から）</span><span>${districtDef(game, p.from).name.split(' ')[0]}が納める ${game.worlds[p.from] ? rate(game.worlds[p.from], p.item) : 0}</span></div>`
+    : `<div class="row"><span>${dot(p.item)}${itemName(p.item)}</span><span>倉庫に入る ${perMin(game, 'in', p.item)}</span></div>`)).join('')
     + (ports.length ? '<p class="hint">倉庫に入る量を、受け取る口で等分する。足りなければ前の区画を改善する。</p>' : '');
   paintIcons();
 }
@@ -938,7 +940,7 @@ function updateInfo() {
       if (buildings[e.id].shake) s += '｜揺れる';
       if (choosable(e)) s += '｜クリックでレシピを選ぶ';
     } else if (e.kind === 'source' && e.extra) s += `：${itemName(e.item)}（前の区画から）と${itemName(e.extra)}が交互に出る`;
-    else if (e.kind === 'source') s += e.imported ? `：${itemName(e.item)}（前の区画から。倉庫に入る量まで）` : `：${itemName(e.item)}（毎分120個まで）`;
+    else if (e.kind === 'source') s += e.from ? `：${itemName(e.item)}（${districtDef(game, e.from).name}が納めた分だけ）` : e.imported ? `：${itemName(e.item)}（前の区画から。倉庫に入る量まで）` : `：${itemName(e.item)}（毎分${Math.round(600 / e.interval)}個まで）`;
     else if (e.kind === 'sorter') s += `：${e.filter ? `${itemName(e.filter)}だけ左右へ、残りは正面へ` : 'まだ素材を選んでいない（全部正面へ）'}｜クリックで素材を選ぶ`;
     else if (e.kind === 'overflow') s += '：先が詰まった物を倉庫へ戻す（余った物で止まらない）';
     else if (e.kind === 'emitter') s += emitterInfo(e);

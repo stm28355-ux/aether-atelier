@@ -300,9 +300,12 @@ export const districts = [
   {
     id: 'd10', name: '区10 浮き橋の桟橋', sys: 'エーテル', leyline: false, part: 2,
     intro: '港の桟橋。水の上には何も置けない。足場は岸と島と細い桟橋だけ。下をくぐるベルトなら、水の下を4マスまで通せる。組立台に板2と浮遊石1で浮き板（別のレシピ。機械をクリックして選ぶ）。浮遊石は区9から倉庫を通して届く。',
-    w: 18, h: 6, walls: [],
-    water: [...rect(4, 0, 3, 4), ...rect(4, 5, 3, 1), ...rect(12, 0, 4, 6)],
-    rubble: [], // 第2部の育てるの区画を作るときに足す
+    w: 18, h: 8, walls: [],
+    water: [...rect(4, 0, 3, 4), ...rect(4, 5, 3, 3), ...rect(12, 0, 4, 8)],
+    rubble: [ // 水の上には瓦礫はない。岸と島の下の2列
+      { id: 'a', tiles: rect(0, 6, 4, 2), name: '岸の下' },
+      { id: 'b', tiles: [...rect(7, 6, 5, 2), ...rect(16, 6, 2, 2)], name: '島と右の岸の下' },
+    ],
     fixed: [
       { id: 'source', x: 0, y: 2, dir: 0, item: 'wood' },
       { id: 'source', x: 9, y: 0, dir: 1, item: 'floatstone', imported: true },
@@ -312,8 +315,68 @@ export const districts = [
     requests: [
       { targets: { floatplank: 10 }, unlock: [], reward: 'なし', clears: [['d8', 'b'], ['d9', 'a']] },
       {
-        targets: { floatplank: 20 }, unlock: [], reward: '大目標「浮き橋がかかる」', clears: [['d9', 'b']],
+        targets: { floatplank: 20 }, unlock: [], opens: 'd11', reward: '大目標「浮き橋がかかる」、次の区画「光苔の庭」', clears: [['d9', 'b']],
         goal: { id: 'bridge', title: '浮き橋がかかる', story: '港の水の上に、浮き板を並べた橋が静かに浮かんだ。霧の向こうの島へ、歩いて渡れるようになった。' },
+      },
+    ],
+  },
+  // ---- 第2部：育てる（区11〜13） ----
+  {
+    id: 'd11', name: '区11 光苔の庭', sys: '育てる', leyline: false, part: 2,
+    intro: '灯り台は周り2マスに光の範囲を作る（魔力が要る）。光の中を4マス進んだ胞子は光る苔になる。光は熱や冷気と重なっても打ち消し合わない。胞子は霧の森から毎分30だけ届く。魔力炉の燃料は、区8の精製燃料が倉庫から届く。',
+    w: 12, h: 8, walls: [],
+    rubble: [
+      { id: 'a', tiles: rect(0, 6, 6, 2) },
+      { id: 'b', tiles: rect(6, 6, 6, 2) },
+    ],
+    fixed: [
+      { id: 'source', x: 0, y: 2, dir: 0, item: 'spore', interval: 20 },
+      { id: 'source', x: 0, y: 4, dir: 0, item: 'refuel', imported: true },
+      { id: 'sink', x: 11, y: 2, dir: 0 },
+    ],
+    base: ['lightPost'], recipes: [], limits: {},
+    requests: [
+      { targets: { moss: 15 }, unlock: [], reward: 'なし' },
+      { targets: { moss: 30 }, unlock: [], opens: 'd12', reward: '次の区画「苗床の温室」', clears: [['d10', 'a']] },
+    ],
+  },
+  {
+    id: 'd12', name: '区12 苗床の温室', sys: '育てる', leyline: false, part: 2,
+    intro: '育て床は光る苔1とエーテル水1から光る苔2（1台で毎分15増える）。苔の口は区11が納めた苔だけを受け取る（毎分30。この区画が納めた苔は戻ってこない）。育て床から出た苔の一部を育て床へ戻して増やす。優先分岐は、正面に入れられるときは正面へ、詰まっているときだけ左右へ出す。',
+    w: 14, h: 9, walls: [],
+    rubble: [
+      { id: 'a', tiles: rect(0, 7, 7, 2) },
+      { id: 'b', tiles: rect(7, 7, 7, 2) },
+    ],
+    fixed: [
+      { id: 'source', x: 0, y: 1, dir: 0, item: 'moss', imported: true, from: 'd11' },
+      { id: 'source', x: 0, y: 6, dir: 0, item: 'aether' },
+      { id: 'sink', x: 13, y: 1, dir: 0 },
+    ],
+    base: ['planter', 'prioritySplitter'], recipes: [], limits: {},
+    requests: [
+      { targets: { moss: 60 }, unlock: [], reward: 'なし', clears: [['d11', 'a']] },
+      { targets: { moss: 90 }, unlock: [], opens: 'd13', reward: '次の区画「帆と糸の工房」', clears: [['d10', 'b']] },
+    ],
+  },
+  {
+    id: 'd13', name: '区13 帆と糸の工房', sys: '育てる', leyline: false, part: 2,
+    intro: '光る苔は竜炉の熱の中を2マス進むと乾き苔になる。紡ぎ機は乾き苔2から魔法の糸、織機は糸3から帆布。育て床ではガラス1と光る苔2から苔の鉢（育て床をクリックしてレシピを選ぶ）。苔の鉢にする苔は熱に通さない。苔の口は区12が納めた苔だけを受け取る。澱の口は、区14が開くと使い道ができる。',
+    w: 13, h: 9, walls: [],
+    rubble: [], // 総まとめの区画を作るとき（フェーズ13）に足す
+    fixed: [
+      { id: 'source', x: 0, y: 1, dir: 0, item: 'moss', imported: true, from: 'd12' },
+      { id: 'source', x: 0, y: 6, dir: 0, item: 'glass', imported: true },
+      { id: 'source', x: 0, y: 8, dir: 0, item: 'refuel', imported: true },
+      { id: 'source', x: 12, y: 8, dir: 2, item: 'sludge', imported: true },
+      { id: 'sink', x: 12, y: 4, dir: 0 },
+    ],
+    base: ['spinner', 'loom'], recipes: ['mosspot'], limits: {},
+    requests: [
+      { targets: { thread: 20 }, unlock: [], reward: 'なし', clears: [['d11', 'b'], ['d12', 'a']] },
+      {
+        targets: { canvas: 10, mosspot: 10 }, unlock: [], reward: '大目標「温室と市場」', clears: [['d12', 'b']],
+        goal: { id: 'greenhouse', title: '温室と市場', story: 'ガラスの温室に光る苔の鉢が並び、市場には帆布の天幕が張られた。霧の町に、青白い灯りの市が立つ。' },
       },
     ],
   },
@@ -389,7 +452,7 @@ export const gatedRecipes = [...new Set([
   ...Object.keys(draft2.altRecipes), 'canvasAlt', 'mosspot', 'balloon',
 ])];
 
-// 地図に出す、まだ作っていない区画（第2部の育てる・総まとめ）
+// 地図に出す、まだ作っていない区画（第2部の総まとめ）
 export const upcoming = draft2.districts
   .filter((d) => !districts.some((x) => x.id === d.id))
   .map((d) => ({ id: d.id, name: d.name, sys: d.sys.replace(/（.*）/, '') }));

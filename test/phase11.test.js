@@ -72,5 +72,5 @@ test('区10：浮き板を毎分20で、大目標「浮き橋がかかる」', (
 });
 
 test('地図：まだ作っていない第2部の区画は「準備中」として並ぶ', () => {
-  assert.deepEqual(content.upcoming.map((u) => u.id), ['d11', 'd12', 'd13', 'd14', 'd15']);
+  assert.deepEqual(content.upcoming.map((u) => u.id), ['d14', 'd15']);
 });

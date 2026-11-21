@@ -52,13 +52,13 @@ test('区1の改善した形（鋳型台3台）は、上の1列の瓦礫が片�
   assert.ok(g.worlds.d1.ents.length < MODEL.d1.length + 2);
 });
 
-test('はじめから順に：お手本の配置で全部の依頼が達成でき、3つの大目標が流れ続ける', () => {
+test('はじめから順に：お手本の配置で全部の依頼が達成でき、4つの大目標が流れ続ける', () => {
   const g = playThrough();
   const want = Object.fromEntries(content.districts.map((d) => [d.id, d.requests.length]));
   assert.deepEqual(g.state.done, want);
   run(g, 3 * 60 * 10); // 達成したあとも流し続ける
   const gl = goals(g);
-  assert.deepEqual(gl.map((x) => [x.id, x.reached, x.flowing]), [['clocktower', true, true], ['lights', true, true], ['bridge', true, true]]);
+  assert.deepEqual(gl.map((x) => [x.id, x.reached, x.flowing]), [['clocktower', true, true], ['lights', true, true], ['bridge', true, true], ['greenhouse', true, true]]);
   for (const d of content.districts) assert.equal((g.state.cleared[d.id] || []).length, d.rubble.length, `${d.id} の瓦礫`);
 });
 

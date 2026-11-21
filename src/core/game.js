@@ -219,9 +219,10 @@ function importPorts(game) {
   return ports;
 }
 
-// 倉庫に入った物を、前の区画の物を出す口へ順番に配る
-function distribute(game, item, n) {
-  const ports = game.ports[item] || [];
+// 倉庫に入った物を、前の区画の物を出す口へ順番に配る。
+// from のある口（区12の苔など）は、その区画が納めた物だけを受け取る（自分の区画が納めた物が倉庫を回って戻らないように）
+function distribute(game, item, n, by) {
+  const ports = (game.ports[item] || []).filter((p) => !p.from || p.from === by);
   for (let k = 0; k < n; k++) {
     let given = false;
     for (let t = 0; t < ports.length; t++) {
@@ -291,7 +292,7 @@ export function step(game) {
       const n = w.tickOut[t];
       add(game.cur.in, t, n);
       add(game.state.made, t, n);
-      distribute(game, t, n);
+      distribute(game, t, n, id);
     }
   }
   if (game.tick % TPS === 0) {

@@ -100,7 +100,7 @@ export function place(world, id, x, y, dir = 0, props = {}) {
   if (e.kind === 'emitter') { e.on = true; if (def.fuelPerMin) { e.fuel = Math.min(FUEL_CAP, props.fuel || 0); e.burn = 0; e.burning = false; } }
   if (e.kind === 'source') {
     e.item = props.item ?? null; e.interval = props.interval ?? BELT_TICKS; e.cool = 0;
-    if (props.imported) { e.imported = true; e.credit = 0; }
+    if (props.imported) { e.imported = true; e.credit = 0; if (props.from) e.from = props.from; }
     if (props.extra) { e.extra = props.extra; e.turn = 0; }
   }
   if (e.kind === 'sink') e.count = {};
@@ -593,7 +593,7 @@ export function serialize(world) {
       if (e.kind === 'sorter' && e.filter) o.filter = e.filter;
       if (e.kind === 'emitter' && e.fuel) o.fuel = e.fuel; // 読み直したとき、炉が冷えて詰まらないように
       if (e.kind === 'source') {
-        o.item = e.item; if (e.interval !== BELT_TICKS) o.interval = e.interval; if (e.imported) o.imported = true;
+        o.item = e.item; if (e.interval !== BELT_TICKS) o.interval = e.interval; if (e.imported) o.imported = true; if (e.from) o.from = e.from;
         if (e.extra) o.extra = e.extra;
       }
       return o;

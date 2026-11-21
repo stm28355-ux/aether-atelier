@@ -41,4 +41,36 @@ const d10 = [
   b(9, 4, E), b(10, 4, E), u(11, 4, E, 'in'), u(16, 4, E, 'out'),
 ];
 
-export const STAGES2 = { d8: [d8a, d8b], d9: [d9], d10: [d10] };
+// 区11（12×6）。光る苔を毎分30：胞子のベルトを灯り台の光に5マス通す。灯り台は魔力炉の範囲に
+const d11 = [
+  ...row(range(1, 10), 2, E), m('lightPost', 5, 1), m('manaFurnace', 4, 3), ...row([1, 2, 3], 4, E),
+];
+
+// 区12（14×7）。光る苔を毎分90：育て床4台（上向き）の間の列から、苔は上から、エーテル水は下から分岐で左右へ入れる。
+// 出た苔は上の列で集め（苔の落ちる列は下をくぐる）、優先分岐で上の列へ戻し、戻しきれない分を納める
+const ps = (x, y, dir) => ({ id: 'prioritySplitter', x, y, dir });
+const d12 = [
+  m('planter', 1, 3, N), m('planter', 4, 3, N), m('planter', 7, 3, N), m('planter', 10, 3, N),
+  b(1, 1, E), b(2, 1, E), m('splitter', 3, 1, E), ...row(range(4, 8), 1, E), b(9, 1, S), // 苔
+  b(3, 2, S), b(9, 2, S), m('splitter', 3, 3, S), m('splitter', 9, 3, S),
+  m('splitter', 1, 6, E), b(1, 5, W), b(0, 5, N), ...row(range(2, 5), 6, E), m('splitter', 6, 6, E), b(6, 5, N), // エーテル水
+  ...row(range(7, 11), 6, E), b(12, 6, N), b(12, 5, N),
+  m('splitter', 0, 4, N), m('splitter', 6, 4, N), m('splitter', 12, 4, N),
+  b(1, 2, E), u(2, 2, E, 'in'), u(4, 2, E, 'out'), b(5, 2, E), b(6, 2, E), b(7, 2, E), u(8, 2, E, 'in'), u(10, 2, E, 'out'),
+  b(11, 2, E), b(12, 2, N), ps(12, 1, N), // 出た苔
+  b(12, 0, W), ...row(range(2, 11), 0, W), b(1, 0, S), // 戻す
+];
+
+// 区13（13×9）。帆布を毎分10と苔の鉢を毎分10：苔は優先分岐で、熱の列（乾き苔 → 紡ぎ機 → 織機）が先、
+// あふれた分を下の育て床（苔の鉢。ガラスは口から直接）へ
+const d13common = [
+  ps(1, 1, E), ...row(range(2, 9), 1, E), m('spinner', 10, 0, S), m('furnace', 6, 2), m('manaFurnace', 6, 4),
+  ...col(1, [2, 3, 4], S), m('planter', 1, 5, E, { recipe: 'mosspot' }),
+  b(3, 6, S), ...row(range(3, 11), 7, E), ...col(12, [7, 6, 5], N), // 苔の鉢 → 納める口
+  ...row(range(1, 5), 8, E), u(6, 8, N, 'in'), u(6, 6, N, 'out'), // 精製燃料
+  b(10, 2, S),
+];
+const d13a = [...d13common, b(10, 3, S), b(10, 4, E), b(11, 4, E)]; // 段1：魔法の糸を毎分20
+const d13b = [...d13common, m('loom', 10, 3, E, { recipe: 'weave' })]; // 段2：帆布
+
+export const STAGES2 = { d8: [d8a, d8b], d9: [d9], d10: [d10], d11: [d11], d12: [d12], d13: [d13a, d13b] };
