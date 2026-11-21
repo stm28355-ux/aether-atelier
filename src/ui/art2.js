@@ -1,7 +1,7 @@
-// 第2部の絵（試し描き。フェーズ14）。palette3.html だけが読み込む。人が OK を出したら machines.js と sprites.js に移す。
+// 第2部の機械と素材の絵（フェーズ14。試し描き3回目を人が OK）。machines.js と sprites.js が読み込んで足す。
 // 第1部と同じ決まり：1マス＝20ドット、真上から見た形、モチーフを1つ真ん中に、顔はつけない。
 // active：動いているか（止まると光や液が暗くなる）
-import { OUT, shade, base } from './machines.js';
+import { OUT, shade, base } from './pixel.js';
 
 // 横長の楕円（rx, ry）を塗る
 function oval(d, cx, cy, rx, ry, c) {
@@ -77,6 +77,26 @@ export const ART2 = {
     if (active) for (const [x, y] of [[17, 9], [33, 18], [7, 20], [23, 33]]) d.px(x, y, '#b8ffe0'); // 光の粒
   },
 
+  // 紡ぎ機：大きな糸車（スポーク）と、糸を巻いた紡錘。下に乾き苔の山
+  spinner(d, gw, gh, active) {
+    base(d, gw, gh, '#7a8a5a', { wood: true });
+    const cx = 16, cy = 17;
+    d.disc(cx, cy, 12.4, OUT);
+    d.disc(cx, cy, 11.4, '#b07a3c'); // 車の輪
+    d.disc(cx, cy, 9.6, OUT);
+    d.disc(cx, cy, 8.8, '#6e5a36');
+    for (let k = 0; k < 6; k++) { // スポーク
+      const a = (k / 6) * Math.PI * 2 + (active ? 0.25 : 0);
+      d.line(cx, cy, cx + Math.cos(a) * 8.6, cy + Math.sin(a) * 8.6, '#c9935a');
+    }
+    d.disc(cx, cy, 2.6, OUT); d.disc(cx, cy, 1.6, '#e0b97a');
+    d.r(29, 8, 6, 20, OUT); d.r(30, 9, 4, 18, '#d8f0e6'); // 糸を巻いた紡錘
+    for (let y = 10; y < 27; y += 2) d.r(30, y, 4, 1, active ? '#a8f0d0' : '#b8c8c0');
+    d.r(31, 5, 2, 4, OUT); d.r(31, 27, 2, 4, OUT);
+    d.line(cx + 9, cy - 8, 30, 10, '#e8fff4'); // 糸
+    for (const [x, y] of [[6, 32], [9, 33], [12, 32], [8, 31], [11, 34], [14, 33]]) { d.r(x, y, 3, 2, OUT); d.r(x, y, 2, 1, '#a9b67a'); } // 乾き苔
+  },
+
   // 織機：上下の梁の間に縦糸を張り、下半分は織り上がった帆布。真ん中に杼
   loom(d, gw, gh) {
     base(d, gw, gh, '#8a6a40', { wood: true });
@@ -137,6 +157,50 @@ export const ITEMS2 = {
   moss: { // 光る苔：青白く光る小さな株
     rows: ['', '', '', '......o..o......', '.....oGooGo.....', '...o.oGGGGo.o...', '..oGooGgGGGooGo.', '..oGGGgGGGgGGGo.', '.oGGgGGGwGGGGGo.', '.oGGGGGwwGGgGGo.', '.oGgGGGGGGGGGGo.', '..oGGGGgGGGGGo..', '..oddddddddddo..', '...oooooooooo...'],
     pal: { G: '#6fe0b0', g: '#3fb487', w: '#dcfff0', d: '#45301f' },
+  },
+  refuel: { // 精製燃料：燃料の小瓶より明るい紫に、星の光
+    rows: ['', '......oooo......', '......oKKo......', '.......oo.......', '......oVVo......', '.....oVVVVo.....', '....oVwVVVVo....', '...oVVwVVsVVo...', '...oVVVVsSsVo...', '...oVVVVVsVVo...', '...oVVVVVVVvo...', '....ovvvvvvo....', '.....oooooo.....'],
+    pal: { V: '#c66cf0', v: '#8a3ab0', K: '#a07a4a', w: '#f0d8ff', s: '#ffffff', S: '#fff6c4' },
+  },
+  gravel: { // 石くず：浮遊石になりそこねた、小さな灰色の石
+    rows: ['', '', '', '', '', '', '.....ooo........', '....oGGGo.ooo...', '....oGgGooGGGo..', '..ooooGooGGgGo..', '.oGGGooGGoooo...', '.oGgGGooGGgGo...', '..oGGGo.ooooo...', '...ooo..........'],
+    pal: { G: '#7f786c', g: '#5f594f' },
+  },
+  floatplank: { // 浮き板：板に浮遊石を埋め込んだもの。少し浮いている
+    rows: ['', '', '', '', '.oooooooooooooo.', '.oPPPPPPPPPPPPo.', '.oPppPoooPPppPo.', '.oPPPoFFFoPPPPo.', '.oPPPoFwFoPPPPo.', '.oPppPoooPPppPo.', '.oPPPPPPPPPPPPo.', '.oooooooooooooo.', '...gggggggggg...'],
+    pal: { P: '#c8a86a', p: '#a5874e', F: '#9fd6c9', w: '#e8fff8', g: '#bfe9f2' },
+  },
+  spore: { // 胞子：ふわふわ漂う、淡い緑の小さな粒
+    rows: ['', '', '.........oo.....', '........oSso....', '...oo....oo.....', '..oSso......oo..', '...oo..oo..oSso.', '......oSSo..oo..', '......oSso......', '..oo...oo...oo..', '.oSso......oSso.', '..oo...oo...oo..', '......oSso......', '.......oo.......'],
+    pal: { S: '#c9e6a3', s: '#9fbf72' },
+  },
+  drymoss: { // 乾き苔：熱で乾いて、わらのようにほぐれた苔
+    rows: ['', '', '', '', '....o..o..o.....', '...oYooYooYo.o..', '..oYyYYyYYyYoYo.', '.oYYyYYYyYYYyYo.', '.oYyYYyYYYyYYYo.', '.oYYYyYYyYYYyYo.', '..oYYYYYYYYYYo..', '..oddddddddddo..', '...oooooooooo...'],
+    pal: { Y: '#c8c27a', y: '#a9a25c', d: '#7a6a42' },
+  },
+  thread: { // 魔法の糸：ほのかに光る糸を巻いた糸巻き
+    rows: ['', '', '...oooooooooo...', '...oWWWWWWWWo...', '....oooooooo....', '....oTtTtTtTo...', '....otTtTtTto...', '....oTtTtTtTo...', '....otTtTtTto...', '....oTtTtTtTo...', '....oooooooo....', '...oWWWWWWWWo...', '...oooooooooo...', '..........oTTo..', '............oo..'],
+    pal: { W: '#b07a3c', T: '#d8f0e6', t: '#9fe0c4' },
+  },
+  mosspot: { // 苔の鉢：ガラスの鉢に植えた光る苔
+    rows: ['', '', '....o.o..o.o....', '...oGoGooGoGo...', '..oGGgGGGgGGGo..', '..oGGGGwGGGGGo..', '..oooooooooooo..', '..oBBwBBBBBBBo..', '..oBwBBBBBBBBo..', '...oBBBBBBBBo...', '...oBBBBBBBbo...', '....oBBBBBbo....', '....oooooooo....'],
+    pal: { G: '#6fe0b0', g: '#3fb487', w: '#dcfff0', B: '#a8e6f0', b: '#6fb8c8' },
+  },
+  balloon: { // 浮き袋：帆布に浮遊石を縫い込んだ、紫の袋と網
+    rows: ['', '....oooooooo....', '..ooBBBBBBBBoo..', '.oBBwwBBnBBBBBo.', '.oBwBBBBnBBBBbo.', 'oBBBBnnnnnnnBBbo', 'oBBBBBBBnBBBBbbo', '.oBBBBBBnBBBbbo.', '..oobBBBnBBboo..', '....oooooooo....', '.....o.oo.o.....', '......oooo......', '......oFFo......', '.......oo.......'],
+    pal: { B: '#a87fd6', b: '#7a58a8', w: '#e6d6ff', n: '#d9c2f0', F: '#9fd6c9' },
+  },
+  compass: { // 航海計器：真鍮の円の中に、光る苔の針
+    rows: ['', '.....oooooo.....', '...ooCCCCCCoo...', '..oCCoooooooCo..', '..oCoWWWWWWoCo..', '.oCoWWWWgWWWoCo.', '.oCoWWWWgWWWoCo.', '.oCoWWWgGgWWoCo.', '.oCoWWWWrWWWoCo.', '.oCoWWWWrWWWoCo.', '..oCoWWWWWWoCo..', '..oCCoooooooCo..', '...ooCCCCCCoo...', '.....oooooo.....'],
+    pal: { C: '#d0a640', W: '#f4efe0', g: '#6fe0b0', G: '#2f7a5a', r: '#c0392b' },
+  },
+  hull: { // 船体：浮き板を鋼の帯で留めた舟の形（横から）
+    rows: ['', '', '', '', '', 'oooooooooooooooo', 'oHHHHHHHHHHHHHHo', 'ohhhhhhhhhhhhhho', 'oSSSSSSSSSSSSSSo', '.oHHHHHHHHHHHHo.', '..ohhhhhhhhhho..', '...oHHHHHHHHo...', '....oooooooo....'],
+    pal: { H: '#8a6a44', h: '#6e5236', S: '#45607e' },
+  },
+  airship: { // 飛空艇：浮き袋の下に船体を吊った、小さな飛空艇（横から）
+    rows: ['', '...oooooooooo...', '.ooBBBwwBBBBBoo.', 'oBBBwwBBBBBBBBbo', 'oBBBBBBBBBBBBBbo', '.ooBBBBBBBBBboo.', '...oooooooooo..o', '....o..oo..o..oF', '....o..oo..o..o.', '..oooooooooooo..', '..oHyHHyHHyHHo..', '...ohhhhhhhho...', '....oooooooo....'],
+    pal: { B: '#a87fd6', b: '#7a58a8', w: '#e6d6ff', H: '#8a6a44', h: '#6e5236', y: '#ffd166', F: '#8c5e30' },
   },
   canvas: { // 帆布：巻いた布。端の巻き目が見える
     rows: ['', '', '', '', '..oooooooooooo..', '.oCCCCCCCCCCCoRo', '.oCcCCCCcCCCCoRo', '.oCCCCcCCCCcCoRo', '.oCCcCCCCcCCCoro', '.oCCCCCCCCCCCoRo', '..oooooooooooo..', '', ''],

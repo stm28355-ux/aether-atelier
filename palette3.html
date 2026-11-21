@@ -3,14 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>絵の試し描き3回目</title>
+<title>第2部の絵</title>
 <link rel="stylesheet" href="style.css">
 <style>
   .page { max-width: 1100px; margin: 0 auto; padding: 16px; }
   .page h2 { font-size: 17px; margin: 28px 0 6px; color: var(--ink); }
   .page p.note { margin: 0 0 12px; color: var(--sub); }
-  .page ul.note { margin: 0 0 12px; color: var(--sub); padding-left: 20px; }
-  .mrow { display: grid; grid-template-columns: 170px repeat(2, auto) 1fr; gap: 14px; align-items: end; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin-bottom: 10px; }
+  .mrow { display: grid; grid-template-columns: 170px auto 1fr; gap: 14px; align-items: end; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin-bottom: 10px; }
   .mrow .name b { display: block; font-size: 15px; }
   .mrow .name span { color: var(--sub); font-size: 12px; }
   .irow { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; }
@@ -20,47 +19,36 @@
   figure { margin: 0; text-align: center; display: inline-block; }
   figcaption { font-size: 12px; color: var(--sub); margin-top: 4px; }
   canvas { image-rendering: pixelated; border-radius: 6px; }
-  .row { display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start; }
   .board canvas { border: 1px solid var(--line); }
-  .head { display: grid; grid-template-columns: 170px repeat(2, auto) 1fr; gap: 14px; font-size: 12px; color: var(--sub); padding: 0 12px; }
-  @media (max-width: 700px) { .irow { grid-template-columns: repeat(3, 1fr); } .mrow, .head { grid-template-columns: 1fr; } }
+  @media (max-width: 700px) { .irow { grid-template-columns: repeat(3, 1fr); } .mrow { grid-template-columns: 1fr; } }
 </style>
 </head>
 <body>
 <header>
-  <h1>Aether Atelier <small>絵の試し描き（3回目・第2部）</small></h1>
-  <nav><a href="./">ゲームへ戻る</a>　<a href="palette2.html">2回目（第1部の機械）</a></nav>
+  <h1>Aether Atelier <small>第2部の絵</small></h1>
+  <nav><a href="./">ゲームへ戻る</a>　<a href="palette2.html">試し描き2回目（第1部の機械）</a></nav>
 </header>
 <div class="page">
-  <p class="note">第2部の機械と素材を、第1部と同じ決まり（1マス＝20ドット、真上から見た形、モチーフを1つ、顔なし）で描いた見本です。まず機械6つと素材6つだけ描きました。ゲームの中はまだ今の仮の見た目のままです。</p>
-  <ul class="note">
-    <li>見てほしいこと：かっこいいか／何の機械・素材か分かるか／第1部の絵と並べて浮かないか</li>
-    <li>残り（紡ぎ機と素材11個）は、この6つへの感想を受けてから描きます</li>
-  </ul>
+  <p class="note">第2部の機械と素材を、第1部と同じ決まり（1マス＝20ドット、真上から見た形、モチーフを1つ、顔なし）で描きました。試し描き3回目の6つずつは人が OK（11/21）。残り（紡ぎ機と素材11個）も描き、ゲームの中もこの絵です。</p>
 
-  <h2>1. 機械（6つ）</h2>
-  <p class="note">名前の帯はゲームと同じ形。右の大きい絵は、動いている／止まっているの2つ（止まると光や液が暗くなる）。</p>
-  <div class="head"><span></span><span>今（仮）</span><span>新しい絵</span><span>大きく（2倍）</span></div>
+  <h2>1. 機械（7つ）</h2>
+  <p class="note">左は盤面の大きさ（名前の帯つき）。右は大きく（2倍）、動いている／止まっている。</p>
   <div id="machines"></div>
 
-  <h2>2. 素材（6つ）</h2>
-  <p class="note">上が今（色の丸）、下が新しい絵。ベルトの上と同じ大きさと、大きく（3倍）。</p>
+  <h2>2. 素材（17個）</h2>
+  <p class="note">ベルトの上と同じ大きさと、1.5倍。</p>
   <div class="irow" id="items"></div>
 
   <h2>3. 盤面の上で</h2>
   <p class="note">精製器から精製エーテルと澱が交互に出て、選り分けで分かれる。下は胞子が灯り台の光で光る苔になり、育て床へ。</p>
-  <div class="row board">
-    <figure><canvas id="b-now"></canvas><figcaption>今（仮）</figcaption></figure>
-    <figure><canvas id="b-new"></canvas><figcaption>新しい絵</figcaption></figure>
-  </div>
+  <div class="board"><canvas id="board"></canvas></div>
 </div>
 <script type="module">
 import content from './src/data/content.js';
 import { createWorld, place, run, rebuild } from './src/core/sim.js';
 import { draw, CELL as C } from './src/ui/draw.js';
-import { drawMachineArt, addArt } from './src/ui/machines.js';
-import { drawItem, addItemArt } from './src/ui/sprites.js';
-import { ART2, ITEMS2 } from './src/ui/art2.js';
+import { drawMachineArt } from './src/ui/machines.js';
+import { drawItem } from './src/ui/sprites.js';
 
 const dpr = window.devicePixelRatio || 1;
 function canvas(w, h, el = document.createElement('canvas')) {
@@ -73,11 +61,12 @@ function canvas(w, h, el = document.createElement('canvas')) {
 }
 const fig = (c, cap) => { const f = document.createElement('figure'); f.append(c); if (cap) f.insertAdjacentHTML('beforeend', `<figcaption>${cap}</figcaption>`); return f; };
 
-const SAMPLES = [
+const MACHINES = [
   ['refiner', 'エーテル。ガラスの槽で、上に澄んだ精製エーテル、底に澱。下に2つの出口'],
   ['steeper', 'エーテル。光る液を満たした槽に、浮きかけの浮遊石'],
   ['lightPost', '光（1×1）。上から見たランタンと、広がる光'],
   ['planter', '育てる。木の枠に黒い土と、光る苔の株'],
+  ['spinner', '育てる。大きな糸車と、糸を巻いた紡錘。下に乾き苔の山'],
   ['loom', '育てる。梁の間の縦糸と、織り上がった帆布、真ん中に杼'],
   ['shipyard', '総まとめ（4×4）。真上から見た飛空艇の浮き袋と尾翼、足場の柱'],
 ];
@@ -91,6 +80,37 @@ function one(id) {
   draw(ctx, w, { alpha: 0, art: 'name' });
   return c;
 }
+const box = document.getElementById('machines');
+for (const [id, note] of MACHINES) {
+  const b = content.buildings[id];
+  const row = document.createElement('div');
+  row.className = 'mrow';
+  row.insertAdjacentHTML('beforeend', `<div class="name"><b>${b.name}</b><span>${note}</span></div>`);
+  row.append(fig(one(id)));
+  const k = 2;
+  const [big, ctx] = canvas(b.w * C * k * 2 + 12, b.h * C * k);
+  for (const [i, act] of [[0, true], [1, false]]) {
+    ctx.save(); ctx.translate(i * (b.w * C * k + 12), 0); ctx.scale(k, k);
+    drawMachineArt(ctx, id, 0, 0, b.w * C, b.h * C, act);
+    ctx.restore();
+  }
+  row.append(fig(big, '動いている／止まっている'));
+  box.append(row);
+}
+
+const ibox = document.getElementById('items');
+for (const id of Object.keys(content.items).filter((t) => content.items[t].part === 2)) {
+  const card = document.createElement('div');
+  card.className = 'icard';
+  card.insertAdjacentHTML('beforeend', `<b>${content.items[id].name}</b>`);
+  const [c, ctx] = canvas(100, 52);
+  drawItem(ctx, id, 20, 26, 32);
+  ctx.save(); ctx.translate(46, 2); drawItem(ctx, id, 24, 24, 48); ctx.restore();
+  card.append(c);
+  card.insertAdjacentHTML('beforeend', `<span>${content.items[id].role || ''}</span>`);
+  ibox.append(card);
+}
+
 function board() {
   const w = createWorld({ w: 13, h: 7, leyline: true }, content);
   const P = (id, x, y, dir = 0, p = {}) => place(w, id, x, y, dir, p);
@@ -104,58 +124,8 @@ function board() {
   run(w, 260);
   return w;
 }
-
-// 今（仮）の絵を先に描き、そのあと新しい絵を足して描く
-const box = document.getElementById('machines');
-const rows = SAMPLES.map(([id, note]) => {
-  const row = document.createElement('div');
-  row.className = 'mrow';
-  row.insertAdjacentHTML('beforeend', `<div class="name"><b>${content.buildings[id].name}</b><span>${note}</span></div>`);
-  row.append(fig(one(id)));
-  box.append(row);
-  return [id, row];
-});
-const itemsNow = {};
-for (const id of Object.keys(ITEMS2)) {
-  const [c, ctx] = canvas(110, 52);
-  drawItem(ctx, id, 20, 26, 32);
-  ctx.save(); ctx.translate(46, 2); drawItem(ctx, id, 24, 24, 48); ctx.restore();
-  itemsNow[id] = c;
-}
-const W = board();
-const [, nctx] = canvas(13 * C, 7 * C, document.getElementById('b-now'));
-draw(nctx, W, { alpha: 0, art: 'name' });
-
-addArt(ART2);
-addItemArt(ITEMS2);
-
-for (const [id, row] of rows) {
-  const b = content.buildings[id];
-  row.append(fig(one(id)));
-  const k = 2;
-  const [big, ctx] = canvas(b.w * C * k * 2 + 12, b.h * C * k);
-  for (const [i, act] of [[0, true], [1, false]]) {
-    ctx.save(); ctx.translate(i * (b.w * C * k + 12), 0); ctx.scale(k, k);
-    drawMachineArt(ctx, id, 0, 0, b.w * C, b.h * C, act);
-    ctx.restore();
-  }
-  row.append(fig(big, '動いている／止まっている'));
-}
-const ibox = document.getElementById('items');
-for (const id of Object.keys(ITEMS2)) {
-  const card = document.createElement('div');
-  card.className = 'icard';
-  card.insertAdjacentHTML('beforeend', `<b>${content.items[id].name}</b>`);
-  card.append(itemsNow[id]);
-  const [c, ctx] = canvas(110, 52);
-  drawItem(ctx, id, 20, 26, 32);
-  ctx.save(); ctx.translate(46, 2); drawItem(ctx, id, 24, 24, 48); ctx.restore();
-  card.append(c);
-  card.insertAdjacentHTML('beforeend', `<span>${content.items[id].role || ''}</span>`);
-  ibox.append(card);
-}
-const [, bctx] = canvas(13 * C, 7 * C, document.getElementById('b-new'));
-draw(bctx, W, { alpha: 0, art: 'name' });
+const [, bctx] = canvas(13 * C, 7 * C, document.getElementById('board'));
+draw(bctx, board(), { alpha: 0, art: 'name' });
 </script>
 </body>
 </html>

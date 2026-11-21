@@ -1,3 +1,5 @@
+import { ITEMS2 } from './art2.js';
+
 // 素材と機械の絵（色の試し描き1回目）。ゲームの描画からも使えるように、canvas に描く関数だけを置く。
 // 素材は 16×16 のドットの格子に描き、size に合わせて拡大する（くっきり見せるため整数倍で描く）。
 
@@ -9,7 +11,7 @@ export const ITEM_COLORS = {
   glassmix: '#e8efe0', glass: '#a8e6f0', lens: '#4aa8e8', fuel: '#9b6cf0',
   gearbox: '#b8862f', redplate: '#e8452c', steel: '#45607e', crystal: '#7e5cf0',
   spring: '#7d93ad', clockwork: '#e0b440', lantern: '#f2c94c',
-  // 第2部（絵はフェーズ14。今は色の丸）
+  // 第2部（絵は art2.js）
   refined: '#bff3ff', sludge: '#6b5a3e', refuel: '#c66cf0', floatmix: '#b9b08f', gravel: '#7f786c',
   floatstone: '#9fd6c9', floatplank: '#c8a86a', spore: '#c9e6a3', moss: '#6fe0b0', drymoss: '#a9b67a',
   thread: '#d8f0e6', canvas: '#efe6cf', mosspot: '#58c49a', balloon: '#e8d7a8', compass: '#d0a640',
@@ -34,8 +36,8 @@ function grid(px, rows, pal) {
   });
 }
 
-// 試し描きのページから、まだ本番に入れていない素材の絵を足す：{ id: { rows, pal } }（pal の c は素材の色）
-const EXTRA = {};
+// 文字の並びで描く素材の絵：{ id: { rows, pal } }（第2部の素材と、試し描きのページから足す絵）
+const EXTRA = { ...ITEMS2 }; // 第2部の素材（art2.js）
 export function addItemArt(more) { Object.assign(EXTRA, more); }
 
 // 素材を描く。cx, cy は中心、size は見た目の大きさ（px）
@@ -137,7 +139,7 @@ export const MACHINE_STYLE = {
   still: { body: '#3f9fb0', kind: '魔力' },
   polisher: { body: '#4a7fc0', kind: '魔力' },
   workbench: { body: '#8a6a2a', kind: '魔力' },
-  // 第2部（絵はフェーズ14）
+  // 第2部（絵は art2.js）
   refiner: { body: '#3f8fa8', kind: 'エーテル' },
   steeper: { body: '#4f7f8a', kind: 'エーテル' },
   lightPost: { body: '#b8962a', kind: '光' },

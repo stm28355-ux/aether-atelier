@@ -1,57 +1,13 @@
+import { ART2 } from './art2.js';
+
 // 機械の絵（試し描き2回目）。1マス＝20ドット、1ドット＝2px で描く（ベルトの上の素材と同じ粗さ）。
 // 真上から見た形で、何をする機械かが分かるモチーフを1つ真ん中に置く。顔はつけない。
 // 向きは絵では回さない（正面の辺は盤面の描画で線と矢印を重ねる）。
 // active：動いているか（竜炉の火、魔力炉の結晶、霜の柱の冷気は、止まっていると暗くなる）
 
-export const OUT = '#2b2118';
+export { OUT, shade, base } from './pixel.js';
+import { OUT, shade, base, pen } from './pixel.js';
 export const DOTS = 20; // 1マスのドット数
-
-// 色を明るく（k>0）・暗く（k<0）する
-export function shade(hex, k) {
-  const n = parseInt(hex.slice(1), 16);
-  const t = k > 0 ? 255 : 0, a = Math.abs(k);
-  const f = (v) => Math.round(v + (t - v) * a);
-  return `rgb(${f(n >> 16)},${f((n >> 8) & 255)},${f(n & 255)})`;
-}
-
-// ドットで描く道具
-function pen(ctx, ox, oy, s) {
-  const r = (x, y, w, h, c) => { ctx.fillStyle = c; ctx.fillRect(ox + x * s, oy + y * s, w * s, h * s); };
-  // 塗った円（中心は .5 でもよい）
-  const disc = (cx, cy, rad, c) => {
-    for (let y = Math.floor(cy - rad); y <= Math.ceil(cy + rad); y++) {
-      const dy = y + 0.5 - cy, q = rad * rad - dy * dy;
-      if (q < 0) continue;
-      const dx = Math.sqrt(q), x0 = Math.round(cx - dx), x1 = Math.round(cx + dx);
-      if (x1 > x0) r(x0, y, x1 - x0, 1, c);
-    }
-  };
-  const line = (x0, y0, x1, y1, c) => {
-    const n = Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0));
-    for (let i = 0; i <= n; i++) r(Math.round(x0 + ((x1 - x0) * i) / (n || 1)), Math.round(y0 + ((y1 - y0) * i) / (n || 1)), 1, 1, c);
-  };
-  return { r, disc, line, px: (x, y, c) => r(x, y, 1, 1, c) };
-}
-
-// 台：縁取り、上と左は明るく、下と右は暗く。wood は板の継ぎ目、rivets は四隅の鋲
-export function base(d, gw, gh, body, { wood = false, rivets = false } = {}) {
-  d.r(1, 1, gw - 2, gh - 2, OUT);
-  d.r(2, 2, gw - 4, gh - 4, body);
-  if (wood) {
-    for (let y = 7; y < gh - 3; y += 6) d.r(3, y, gw - 6, 1, shade(body, -0.22));
-    for (let y = 4; y < gh - 3; y += 6) for (let x = 6 + (y % 12 ? 0 : 7); x < gw - 4; x += 14) d.px(x, y, shade(body, 0.18));
-  }
-  d.r(2, 2, gw - 4, 1, shade(body, 0.35));
-  d.r(2, 3, 1, gh - 5, shade(body, 0.18));
-  d.r(2, gh - 3, gw - 4, 1, shade(body, -0.35));
-  d.r(gw - 3, 3, 1, gh - 5, shade(body, -0.2));
-  if (rivets) {
-    for (const [x, y] of [[4, 4], [gw - 6, 4], [4, gh - 6], [gw - 6, gh - 6]]) {
-      d.r(x, y, 2, 2, shade(body, -0.45));
-      d.px(x, y, shade(body, 0.45));
-    }
-  }
-}
 
 // 歯車：歯を外に並べ、左上に光、真ん中に軸穴
 export function gear(d, cx, cy, rad, teeth, color) {
@@ -336,6 +292,8 @@ const ART = {
     d.r(cx + 18, cy - 4, 3, 9, OUT); d.r(cx + 19, cy - 3, 1, 7, '#c0392b');
   },
 };
+
+Object.assign(ART, ART2); // 第2部の機械（art2.js）
 
 export const hasArt = (id) => !!ART[id];
 
