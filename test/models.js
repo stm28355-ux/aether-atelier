@@ -8,11 +8,18 @@ const m = (id, x, y, dir = E, p = {}) => ({ id, x, y, dir, ...p });
 const u = (x, y, dir, role) => ({ id: 'under', x, y, dir, role });
 const of = (x, y, dir) => ({ id: 'overflow', x, y, dir });
 
-// 板を毎分90：製材機3台を分岐で並べる（9×7）
-const d0 = [
+// 板を毎分90：製材機3台を分岐で並べる（9×7。最初に来たときの形）
+const d0First = [
   b(1, 3, E), m('splitter', 2, 3), b(2, 2, N), b(2, 1, E), b(2, 4, S), b(2, 5, E),
   m('saw', 3, 0), m('saw', 3, 3), m('saw', 3, 5),
   b(5, 1, S), b(5, 2, S), b(5, 3, E), b(5, 5, N), b(5, 4, N), b(6, 3, E), b(7, 3, E),
+];
+
+// 区2の依頼で下の瓦礫が片づいたら：製材機を4台にして板を毎分120（区2の枠が毎分40になる）
+const d0 = [
+  b(1, 3, E), m('splitter', 2, 3), b(2, 2, N), b(2, 1, E), b(2, 4, S), m('splitter', 2, 5, S), b(2, 6, S), b(2, 7, E),
+  m('saw', 3, 0), m('saw', 3, 3), m('saw', 3, 5), m('saw', 3, 7),
+  b(5, 1, S), b(5, 2, S), b(5, 3, E), b(5, 7, N), b(5, 6, N), b(5, 5, N), b(5, 4, N), b(6, 3, E), b(7, 3, E),
 ];
 
 // 金属板を毎分60と鉱石粉を毎分30：鉱石を分けて、片方は熱を通す（12×7。最初に来たときの形）
@@ -126,7 +133,9 @@ const d7b = [
   b(9, 4, E), b(10, 4, E), b(11, 4, E),
 ];
 
-export const FIRST = { d1: d1First, d2: d2First };
+export const FIRST = { d0: d0First, d1: d1First, d2: d2First };
+// 瓦礫が片づいてから置ける形（片づくまでは FIRST の形）
+export const IMPROVED = { d0: ["a", "b"], d1: ["a"] };
 export const STAGES = {
   d0: [d0], d1: [d1], d2: [d2], d3: [d3a, d3],
   d4: [d4a, d4b], d5: [d5], d6: [d6a, d6b], d7: [d7a, d7b],

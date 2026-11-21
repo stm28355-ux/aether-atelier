@@ -5,7 +5,7 @@ import content from '../src/data/content.js';
 import { createGame, run, setLayout, districtBlueprint, pasteCheck, pasteInto, replaceWithBlueprint } from '../src/core/game.js';
 import { rate, entAt } from '../src/core/sim.js';
 import { copyArea, rotate, encode, decode } from '../src/core/blueprint.js';
-import { MODEL } from './models.js';
+import { MODEL, FIRST } from './models.js';
 
 const DISTRICTS = Object.keys(MODEL);
 const allOpen = (layouts = MODEL) => createGame(content, {
@@ -38,7 +38,7 @@ test('ほかの区画の図面では、区画を置き換えない', () => {
 });
 
 test('範囲を写すと、外側の空きを詰める。倉庫の口は写さない', () => {
-  const g = allOpen();
+  const g = allOpen({ ...MODEL, d0: FIRST.d0 }); // 製材機3台の形（下の2列は空き）
   const bp = copyArea(g.worlds.d0, 0, 0, 8, 6);
   assert.equal(bp.x, 1); // 区0の口（x=0）は写さず、x=1 のベルトから
   assert.ok(bp.ents.every((e) => e.id !== 'source' && e.id !== 'sink'));

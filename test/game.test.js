@@ -5,11 +5,11 @@ import {
   createGame, run, perMin, save, unlocked, setLayout, goals, recipesFor, clearedBy, PORT_CAP,
 } from '../src/core/game.js';
 import { rate, canPlace, snapshot } from '../src/core/sim.js';
-import { MODEL, STAGES, FIRST } from './models.js';
+import { MODEL, STAGES, FIRST, IMPROVED } from './models.js';
 
 const DISTRICTS = Object.keys(MODEL);
 const PART1 = ['d0', 'd1', 'd2', 'd3'];
-const FIRST_LAYOUTS = { d0: MODEL.d0, d1: FIRST.d1, d2: FIRST.d2, d3: MODEL.d3 };
+const FIRST_LAYOUTS = { d0: FIRST.d0, d1: FIRST.d1, d2: FIRST.d2, d3: MODEL.d3 };
 const fresh = (state) => createGame(content, { v: 1, done: {}, cleared: {}, made: {}, ...state });
 // 第1部（区0〜3）を、最初に来たときの形で開く
 const part1 = () => fresh({ open: PART1, layouts: { ...FIRST_LAYOUTS } });
@@ -26,7 +26,7 @@ function playThrough(maxMinutes = 60) {
       const st = STAGES[id];
       let k = Math.min(g.state.done[id] || 0, st.length - 1);
       let layout = st[k];
-      if (id === 'd1' && !(g.state.cleared.d1 || []).includes('a')) { k = 'first'; layout = FIRST.d1; }
+      if (IMPROVED[id] && !IMPROVED[id].every((p) => (g.state.cleared[id] || []).includes(p))) { k = 'first'; layout = FIRST[id]; }
       if (applied[id] !== k) { setLayout(g, id, layout); applied[id] = k; }
     }
     if (DISTRICTS.every((id) => (g.state.done[id] || 0) >= content.districts.find((d) => d.id === id).requests.length)) break;
@@ -37,8 +37,8 @@ function playThrough(maxMinutes = 60) {
 
 test('お手本の配置はすべて置ける（区画が小さすぎない）', () => {
   // 区1の改善した形だけは、区4が開いて片づく上の1列を使う
-  const cleared = (id, layout) => (id === 'd1' && layout !== FIRST.d1 ? { d1: ['a'] } : {});
-  for (const [id, stages] of Object.entries({ ...STAGES, d1: [...STAGES.d1, FIRST.d1], d2: [...STAGES.d2, FIRST.d2] })) {
+  const cleared = (id, layout) => (IMPROVED[id] && layout !== FIRST[id] ? { [id]: IMPROVED[id] } : {});
+  for (const [id, stages] of Object.entries({ ...STAGES, d0: [...STAGES.d0, FIRST.d0], d1: [...STAGES.d1, FIRST.d1], d2: [...STAGES.d2, FIRST.d2] })) {
     const def = content.districts.find((d) => d.id === id);
     stages.forEach((layout, k) => {
       const g = fresh({ open: [id], layouts: { [id]: layout }, cleared: cleared(id, layout) });
