@@ -1,6 +1,7 @@
 // 盤面を canvas に描く。素材は試し描きの絵（sprites.js）、機械は色の家族。
 import { DX, DY, BELT_TICKS, WALL, RUBBLE, SHAKE_RADIUS, canPlace, isHolder } from '../core/sim.js';
 import { drawItem, MACHINE_STYLE, FIELD_TINT } from './sprites.js';
+import { drawMachineArt, hasArt } from './machines.js';
 
 export const CELL = 40;
 const C = CELL;
@@ -116,6 +117,8 @@ function drawEnt(ctx, world, e, opts) {
         for (let i = 0; i < e.credit; i++) { ctx.fillStyle = '#ffd166'; ctx.fillRect(x + 4, y + C - 8 - i * 5, 3, 3); }
       }
     } else ctx.fillText('納める', cx, cy);
+  } else if (opts.art && hasArt(e.id)) {
+    drawArtEnt(ctx, world, e, opts);
   } else {
     const st = MACHINE_STYLE[e.id] || { body: '#999' };
     ctx.fillStyle = st.body;
@@ -175,6 +178,75 @@ function drawEnt(ctx, world, e, opts) {
         ctx.fillRect(x + 10, y + h - 13, (w - 20) * (1 - e.left / r.ticks), 4);
       }
     }
+  }
+}
+
+// 絵で描く機械（試し描き2回目）。opts.art：'name'（下に名前の帯）か 'plain'（絵だけ。名前はマウスを載せると出る）
+// 止まっている理由は、小さな札で絵の下の方に出す（1×1 は状態の丸だけ）
+function drawArtEnt(ctx, world, e, opts) {
+  const { data } = world;
+  const x = e.x * C, y = e.y * C, w = e.w * C, h = e.h * C, cx = x + w / 2;
+  const small = e.w === 1;
+  let active = true, tag = null, tagColor = '#c0392b', lampColor = null;
+  if (e.kind === 'emitter') {
+    if (e.fuelIn && !world.leyline) {
+      const idle = !e.burning && e.fuel > 0;
+      active = !!e.burning;
+      lampColor = e.burning ? LAMP.working : idle ? LAMP['no-recipe'] : LAMP['no-mana'];
+      if (!e.burning) { tag = idle ? '待っている' : '燃料なし'; if (idle) tagColor = '#7a6d5e'; }
+    } else if (e.needsMana && !world.leyline) {
+      active = !!e.on;
+      lampColor = e.on ? LAMP.working : LAMP['no-mana'];
+      if (!e.on) tag = e.covered ? LABEL['no-fuel'] : LABEL['no-mana'];
+    }
+  } else {
+    const slow = e.slow && e.status === 'working';
+    active = e.status === 'working';
+    lampColor = slow ? LAMP.waiting : LAMP[e.status];
+    tag = slow ? '魔力不足' : LABEL[e.status] ?? null;
+    if (slow || e.status === 'waiting') tagColor = '#a87b0c';
+  }
+  drawMachineArt(ctx, e.id, x, y, w, h, active);
+  const band = opts.art === 'name' && !small;
+  if (band) {
+    ctx.fillStyle = 'rgba(30,22,16,0.78)';
+    ctx.fillRect(x + 4, y + h - 16, w - 8, 13);
+    ctx.fillStyle = '#fff';
+    ctx.font = '600 10px system-ui, sans-serif';
+    ctx.fillText(data.buildings[e.id].name, cx, y + h - 9);
+  }
+  if (e.kind === 'machine') frontEdge(ctx, e, '#fff3d6', small);
+  if (lampColor) lamp(ctx, x, y, lampColor, small);
+  if (e.fuelIn) for (let i = 0; i < e.fuel; i++) { ctx.fillStyle = '#ffd166'; ctx.fillRect(x + w - 10, y + 6 + i * 6, 4, 4); }
+  if (e.kind === 'machine') {
+    const r = data.recipes[e.recipe];
+    if (r) { // 右上に、できる物の絵
+      const ox = x + w - (small ? 10 : 14), oy = y + (small ? 10 : 14);
+      ctx.fillStyle = 'rgba(255,255,255,0.88)';
+      ctx.beginPath(); ctx.arc(ox, oy, small ? 8 : 11, 0, 7); ctx.fill();
+      drawItem(ctx, Object.keys(r.out)[0], ox, oy, 16);
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    }
+    if (e.syn) {
+      ctx.fillStyle = '#ffd166';
+      ctx.font = '600 8px system-ui, sans-serif';
+      ctx.fillText(`+${e.syn * 25}%`, cx, small ? y + h - 6 : y + h - (band ? 24 : 12));
+    }
+    if (r && e.left > 0 && !small) {
+      const by = band ? y + h - 19 : y + h - 8;
+      ctx.fillStyle = 'rgba(0,0,0,0.35)';
+      ctx.fillRect(x + 10, by, w - 20, 3);
+      ctx.fillStyle = '#fff3d6';
+      ctx.fillRect(x + 10, by, (w - 20) * (1 - e.left / r.ticks), 3);
+    }
+  }
+  if (tag && !small) { // 止まっている理由の札
+    ctx.font = '600 10px system-ui, sans-serif';
+    const tw = ctx.measureText(tag).width + 10, ty = y + h - (band ? 30 : 16);
+    ctx.fillStyle = tagColor;
+    ctx.beginPath(); ctx.roundRect(cx - tw / 2, ty - 7, tw, 14, 4); ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.fillText(tag, cx, ty);
   }
 }
 
