@@ -1,6 +1,7 @@
 // ゲームで使う中身。素材・機械・レシピは中身の表（content-draft.js、人が判定済み）から作る。
 // 区画は区0〜7（機工と炉と霜の2系統）。区6と区7の最後の依頼が大目標。
 import draft from './content-draft.js';
+import draft2 from './content-draft2.js';
 import { ITEM_COLORS } from '../ui/sprites.js';
 
 // 図鑑に出す役目（名前と役目を持たせる＝企画の「達成感」）
@@ -29,9 +30,33 @@ const ROLES = {
   lantern: '霧の町を照らす灯り',
 };
 
+// 第2部の素材の役目
+const ROLES2 = {
+  refined: '霧のように軽い、澄んだエーテル',
+  sludge: '精製器の底にたまる、ねばる澱。糊にもなる',
+  refuel: '精製エーテルを煮詰めた燃料。魔力炉で2倍長く燃える',
+  floatmix: '澱と砂を練ったもの。すぐ固まって石くずになる',
+  gravel: '浮遊石になりそこねた石。使い道はない',
+  floatstone: '精製エーテルを吸って、ふわりと浮く石',
+  floatplank: '浮遊石を埋めた板。水の上に浮き橋をかける',
+  spore: '霧の森で集めた、光る苔の胞子',
+  moss: '灯りの下で育つ、青白く光る苔',
+  drymoss: '熱で乾かした苔。ほぐすと糸になる',
+  thread: '光る苔から紡いだ、ほのかに光る糸',
+  canvas: '魔法の糸で織った、軽くて強い布',
+  mosspot: 'ガラスの鉢に植えた光る苔。市場で人気',
+  balloon: '帆布に浮遊石を縫い込んだ、飛空艇の浮き袋',
+  compass: '時計の機構と光る苔の針で、霧の中でも迷わない',
+  hull: '浮き板を鋼と枠で組んだ、飛空艇の船体',
+  airship: '霧の町の空を渡る、工房の最後の大仕事',
+};
+
 export const items = {};
 for (const [id, it] of Object.entries(draft.items)) {
   items[id] = { ...it, color: ITEM_COLORS[id], role: ROLES[id] };
+}
+for (const [id, it] of Object.entries(draft2.items)) {
+  items[id] = { ...it, part: 2, color: ITEM_COLORS[id], role: ROLES2[id] };
 }
 
 export const buildings = {
@@ -42,13 +67,20 @@ export const buildings = {
   under: { name: '下をくぐるベルト', kind: 'under', w: 1, h: 1 },
   sorter: { name: '選り分け', kind: 'sorter', w: 1, h: 1 },
   overflow: { name: 'あふれ口', kind: 'overflow', w: 1, h: 1 },
+  // 第2部の道具
+  fastBelt: { name: '速いベルト', kind: 'belt', fast: true, w: 1, h: 1 },
+  prioritySplitter: { name: '優先分岐', kind: 'splitter', priority: true, w: 1, h: 1 },
 };
-for (const [id, b] of Object.entries(draft.buildings)) {
+for (const [id, b] of Object.entries({ ...draft.buildings, ...draft2.buildings })) {
   buildings[id] = { ...b, kind: b.field ? 'emitter' : 'machine' };
 }
+// 第1部の機械に足すレシピ（区画が開くと選べる）
+for (const [r, b] of Object.entries(draft2.altRecipes)) buildings[b] = { ...buildings[b], recipes: [...buildings[b].recipes, r] };
 
-export const recipes = draft.recipes;
-export const fieldRules = draft.fieldRules;
+export const recipes = { ...draft.recipes, ...draft2.recipes };
+export const fieldRules = [...draft.fieldRules, ...draft2.fieldRules];
+// 時間で変わる素材（ベルトの上で ticks 刻みたつと to になる。pausedBy の範囲の中では時間が止まる）
+export const decayRules = draft2.decayRules;
 
 // 瓦礫の塊を四角で書く道具
 const rect = (x, y, w, h) => {
@@ -225,10 +257,77 @@ export const districts = [
   },
 ];
 
-// 区画を開いたときに使えるようになるレシピ。ここに出てこないレシピは最初から使える
-export const gatedRecipes = [...new Set(districts.flatMap((d) => d.recipes || []))];
+// フェーズ10の試作の区画（URL に ?trial を付けたときだけ開く。本編のセーブとは別）
+// 新しい仕組みを1つずつ試す。地脈はあり（魔力のことは考えなくてよい）
+export const trialDistricts = [
+  {
+    id: 't8', name: '試8 副産物', sys: 'エーテル', leyline: true,
+    intro: '精製器はエーテル水2から、精製エーテル1と澱1を正面から交互に出す。蒸留器は精製エーテルしか受け取らないので、澱をよけないと精製器が詰まって止まる。',
+    w: 10, h: 7, walls: [], rubble: [],
+    fixed: [
+      { id: 'source', x: 0, y: 3, dir: 0, item: 'aether' },
+      { id: 'sink', x: 9, y: 3, dir: 0 },
+    ],
+    base: ['belt', 'splitter', 'sorter', 'overflow', 'refiner', 'still'], recipes: ['refuel'], limits: {},
+    requests: [
+      { targets: { refined: 15 }, unlock: [], reward: 'なし' },
+      { targets: { refuel: 30 }, unlock: [], reward: 'なし' },
+    ],
+  },
+  {
+    id: 't9', name: '試9 時間で変わる', sys: 'エーテル', leyline: true,
+    intro: '浮遊石の素は、できてから6秒（ふつうのベルトで12マス分）で石くずになる。ベルトの上で待っていても数える。冷気の中では時間が止まる。速いベルトは2.5倍の速さ。浸し槽は浮遊石の素と精製エーテルから浮遊石。',
+    w: 14, h: 9, walls: [], rubble: [],
+    fixed: [
+      { id: 'source', x: 0, y: 1, dir: 0, item: 'aether' },
+      { id: 'source', x: 0, y: 5, dir: 0, item: 'sand' },
+      { id: 'sink', x: 13, y: 3, dir: 0 },
+    ],
+    base: ['belt', 'fastBelt', 'splitter', 'sorter', 'overflow', 'under', 'refiner', 'mixer', 'steeper', 'frostPillar'], recipes: ['floatmix'], limits: {},
+    requests: [
+      { targets: { floatstone: 15 }, unlock: [], reward: 'なし' },
+      { targets: { floatstone: 30 }, unlock: [], reward: 'なし' },
+    ],
+  },
+  {
+    id: 't11', name: '試11 光の範囲', sys: '育てる', leyline: true,
+    intro: '灯り台は周り2マスに光の範囲を作る。光の中を4マス進んだ胞子は光る苔になる。光は熱や冷気と重なっても打ち消し合わない。',
+    w: 10, h: 7, walls: [], rubble: [],
+    fixed: [
+      { id: 'source', x: 0, y: 3, dir: 0, item: 'spore' },
+      { id: 'sink', x: 9, y: 3, dir: 0 },
+    ],
+    base: ['belt', 'splitter', 'lightPost'], limits: {},
+    requests: [
+      { targets: { moss: 30 }, unlock: [], reward: 'なし' },
+      { targets: { moss: 60 }, unlock: [], reward: 'なし' },
+    ],
+  },
+  {
+    id: 't12', name: '試12 増える', sys: '育てる', leyline: true,
+    intro: '光る苔の口は毎分30しか出さない。育て床は光る苔1とエーテル水1から光る苔2（差し引き1台で毎分15増える）。増えた苔の一部を育て床に戻す。優先分岐は、正面に入れられるときは正面へ、詰まっているときだけ左右へ出す。',
+    w: 14, h: 10, walls: [], rubble: [],
+    fixed: [
+      { id: 'source', x: 0, y: 2, dir: 0, item: 'moss', interval: 20 },
+      { id: 'source', x: 0, y: 7, dir: 0, item: 'aether' },
+      { id: 'sink', x: 13, y: 4, dir: 0 },
+    ],
+    base: ['belt', 'splitter', 'prioritySplitter', 'under', 'planter'], limits: {},
+    requests: [
+      { targets: { moss: 60 }, unlock: [], reward: 'なし' },
+      { targets: { moss: 90 }, unlock: [], reward: 'なし' },
+    ],
+  },
+];
+
+// 区画を開いたときに使えるようになるレシピ。ここに出てこないレシピは最初から使える。
+// 第2部で第1部の機械に足すレシピと、第2部の機械の2つ目のレシピも、区画が開くまで選べない
+export const gatedRecipes = [...new Set([
+  ...districts.flatMap((d) => d.recipes || []),
+  ...Object.keys(draft2.altRecipes), 'canvasAlt', 'mosspot', 'balloon',
+])];
 
 // 地図に出す、まだ作っていない区画（第2部：エーテル・育てる・飛空艇）
 export const upcoming = [];
 
-export default { items, buildings, recipes, fieldRules, districts, upcoming, gatedRecipes };
+export default { items, buildings, recipes, fieldRules, decayRules, districts, upcoming, gatedRecipes };

@@ -37,7 +37,7 @@ export const buildings = {
   shipyard: { name: '造船台', w: 4, h: 4, recipes: ['airship'], mana: true },
 };
 export const tools = {
-  fastBelt: { name: '速いベルト', note: '1マスを0.25秒で進む（ふつうの2倍、毎分240個まで）' },
+  fastBelt: { name: '速いベルト', note: '1マスを0.2秒で進む（ふつうの2.5倍、毎分300個まで）' },
   prioritySplitter: { name: '優先分岐', note: '正面に入れられるときは正面へ、詰まっているときだけ左右へ' },
 };
 

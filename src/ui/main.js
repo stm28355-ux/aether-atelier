@@ -1,5 +1,5 @@
 // 画面：町の地図・区画・図鑑。ゲームの中身は core/game.js。
-import content from '../data/content.js';
+import mainContent, { trialDistricts } from '../data/content.js';
 import {
   createGame, step as stepGame, layoutChanged, resetDistrict, unlocked, perMin,
   districtDef, save, recipesFor, goals, clearedBy,
@@ -14,13 +14,17 @@ import { drawItem } from './sprites.js';
 import { drawTown, townHit, TOWN_W, TOWN_H } from './town.js';
 
 const $ = (id) => document.getElementById(id);
-const SAVE_KEY = 'aether-atelier-v1';
+// 試作モード（URL に ?trial）：第2部の新しい仕組みを試す区画だけを、本編とは別のセーブで遊ぶ
+const TRIAL = new URLSearchParams(location.search).has('trial');
+const content = TRIAL ? { ...mainContent, districts: trialDistricts, upcoming: [] } : mainContent;
+const SAVE_KEY = TRIAL ? 'aether-atelier-trial' : 'aether-atelier-v1';
 const { items, buildings } = content;
 const itemName = (t) => items[t]?.name ?? t;
 const dot = (t) => `<canvas class="ico" data-item="${t}" width="24" height="24"></canvas>`;
 
 let saved = null;
 try { saved = JSON.parse(localStorage.getItem(SAVE_KEY)); } catch { saved = null; }
+if (TRIAL && !saved) saved = { v: 1, open: trialDistricts.map((d) => d.id), done: {}, cleared: {}, made: {}, layouts: {} };
 let game = createGame(content, saved);
 const persist = () => {
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(save(game))); } catch { /* 保存できなくても遊べる */ }
@@ -48,7 +52,7 @@ document.querySelectorAll('[data-go]').forEach((b) => { b.onclick = () => { loca
 
 // ---- 町の地図 ----
 // 区画は開く順に並べる（地図の絵も、カードも）
-const ORDER = ['d0', 'd1', 'd2', 'd3', 'd4', 'd5', 'd6', 'd7'];
+const ORDER = content.districts.map((d) => d.id);
 let townHover = null;
 function districtState(id) {
   const def = districtDef(game, id);
@@ -78,7 +82,8 @@ function renderMap() {
   }
   const later = document.createElement('p');
   later.className = 'hint later';
-  later.textContent = 'ここまでが第1部（機工と炉と霜）。この先の第2部：エーテル・育てる・飛空艇の系統を作っている。';
+  later.innerHTML = TRIAL ? '試作モード：第2部の新しい仕組み（副産物・時間で変わる・光の範囲・増える）を1つずつ試す区画です。本編のセーブとは別です。<a href="./">本編へ戻る</a>'
+    : 'ここまでが第1部（機工と炉と霜）。この先の第2部：エーテル・育てる・飛空艇の系統を作っている。<a href="?trial">第2部の新しい仕組みを試す（試作モード）</a>';
   grid.append(later);
   updateMap();
 }
@@ -86,6 +91,7 @@ function renderMap() {
 // 町の絵：開いた区画・達成した区画・大目標（時計塔の針、街灯と灯台）
 function paintTown() {
   const c = $('town');
+  if (TRIAL) { c.style.display = 'none'; return; }
   const dpr = window.devicePixelRatio || 1;
   if (c.width !== TOWN_W * dpr) { c.width = TOWN_W * dpr; c.height = TOWN_H * dpr; }
   const ctx = c.getContext('2d');
@@ -173,7 +179,8 @@ function usesOf(t) {
   return list;
 }
 function bookItems() {
-  return Object.entries(items).map(([t, it]) => {
+  // 本編では、まだ出会っていない第2部の素材は載せない
+  return Object.entries(items).filter(([t, it]) => !it.part || TRIAL || known(t)).map(([t, it]) => {
     const n = game.state.made[t] || 0;
     if (!known(t)) return `<div class="entry unknown"><canvas class="ico" data-item="${t}" data-dark="1" width="24" height="24"></canvas><div><b>？？？</b><p>まだ作っていない</p></div></div>`;
     const count = it.sys === '倉庫' ? '倉庫から' : n ? `これまで ${n}個納めた` : '工場の中で作っている';
@@ -193,8 +200,12 @@ function bookRules() {
     <li>範囲を出ても、それまでに数えた分は残る</li>
     <li>熱と冷気が重なったマスは打ち消し合い、どちらも効かない（灰色のマス）</li>
     <li>下をくぐるベルトの中では効かない</li></ul>
-    <table class="rules"><tr><th>範囲</th><th>長さ</th><th>前</th><th></th><th>あと</th></tr>${content.fieldRules.map(row).join('')}</table>
-    <p class="sub">熱は竜炉、冷気は霜の柱が出す。どちらも周り2マス。</p></section>`;
+    <table class="rules"><tr><th>範囲</th><th>長さ</th><th>前</th><th></th><th>あと</th></tr>${content.fieldRules.filter((f) => !items[f.from].part || TRIAL || known(f.from)).map(row).join('')}</table>
+    <p class="sub">熱は竜炉、冷気は霜の柱、光は灯り台が出す。どれも周り2マス。光は熱や冷気と重なっても打ち消し合わない。</p></section>`;
+  const decays = (content.decayRules || []).filter((r) => TRIAL || known(r.from));
+  if (decays.length) { // 時間で変わる物
+    html += `<section class="rule"><h3>時間で変わる物</h3><p>ベルトの上で時間がたつと変わる。ベルトの上で待っていても数える。冷気の中では時間が止まる。素材の右上の輪が、残りの時間。</p><ul>${decays.map((r) => `<li>${dot(r.from)}${itemName(r.from)}は${r.ticks / TPS}秒で${dot(r.to)}${knownName(r.to)}になる</li>`).join('')}</ul></section>`;
+  }
   if (has.has('manaFurnace')) {
     html += `<section class="rule"><h3>魔力</h3><ul>
       <li>地脈のない区画（区3から）では、竜炉・研磨機・霜の柱・からくり台は魔力が要る</li>
@@ -353,8 +364,11 @@ const machineSys = (b) => items[Object.keys(content.recipes[b.recipes[0]].out)[0
 const TABS = [
   { id: 'move', name: '運ぶ', note: 'ベルト・分岐など、物を運ぶ道具', has: (b) => b.kind !== 'machine' && b.kind !== 'emitter' },
   { id: 'kiko', name: '機工', note: '木と金属を組む機械（製材機・組立台・プレス機・旋盤など）', has: (b) => b.kind === 'machine' && machineSys(b) === '機工' },
-  { id: 'ro', name: '炉と霜', note: '砕く・型に流す・混ぜる・磨く機械（粉砕機・鋳型台・調合台・研磨機など）', has: (b) => b.kind === 'machine' && machineSys(b) !== '機工' },
-  { id: 'field', name: '範囲', note: '熱・冷気・魔力の範囲を出す物（竜炉・霜の柱・魔力炉）', has: (b) => b.kind === 'emitter' },
+  { id: 'ro', name: '炉と霜', note: '砕く・型に流す・混ぜる・磨く機械（粉砕機・鋳型台・調合台・研磨機など）', has: (b) => b.kind === 'machine' && machineSys(b) === '炉と霜' },
+  { id: 'ether', name: 'エーテル', note: 'エーテルを精製する機械（精製器・浸し槽）', has: (b) => b.kind === 'machine' && machineSys(b) === 'エーテル' },
+  { id: 'grow', name: '育てる', note: '苔を育てる・紡ぐ・織る機械（育て床・紡ぎ機・織機）', has: (b) => b.kind === 'machine' && machineSys(b) === '育てる' },
+  { id: 'final', name: '総まとめ', note: '飛空艇を組む機械（造船台）', has: (b) => b.kind === 'machine' && machineSys(b) === '総まとめ' },
+  { id: 'field', name: '範囲', note: '熱・冷気・魔力・光の範囲を出す物（竜炉・霜の柱・魔力炉・灯り台）', has: (b) => b.kind === 'emitter' },
 ];
 const inTab = (tab) => placeable().filter((id) => TABS.find((g) => g.id === tab).has(buildings[id]));
 const tabsShown = () => TABS.filter((g) => inTab(g.id).length);
@@ -366,8 +380,8 @@ function switchTab(stepN) {
 }
 
 // 置く物の2行目：何を作るか（材料 → できる物の絵）
-const TOOL_SHORT = { belt: 'ドラッグで引く', splitter: '正面・左・右へ順に出す', under: '4マスまで下を通す', sorter: '選んだ素材を左右へ', overflow: '詰まった物を倉庫へ戻す' };
-const FIELD_NAME = { heat: '熱', cold: '冷気', mana: '魔力' };
+const TOOL_SHORT = { belt: 'ドラッグで引く', splitter: '正面・左・右へ順に出す', under: '4マスまで下を通す', sorter: '選んだ素材を左右へ', overflow: '詰まった物を倉庫へ戻す', fastBelt: '2.5倍の速さ。ドラッグで引く', prioritySplitter: '正面が先、詰まったら左右へ' };
+const FIELD_NAME = { heat: '熱', cold: '冷気', mana: '魔力', light: '光' };
 function makesHtml(id) {
   const b = buildings[id];
   const icons = (o) => Object.entries(o).map(([k, n]) => `${dot(k)}${n > 1 ? `<sub>${n}</sub>` : ''}`).join('');
@@ -556,9 +570,11 @@ function tileAt(ev) {
   return { x: Math.floor((ev.clientX - r.left) / CELL), y: Math.floor((ev.clientY - r.top) / CELL) };
 }
 function putBelt(x, y, d) {
+  const id = buildings[ui.tool]?.kind === 'belt' ? ui.tool : 'belt';
   const e = entAt(world, x, y);
+  if (e && e.kind === 'belt' && !e.fixed && e.id !== id) { remove(world, x, y); place(world, id, x, y, d); return; }
   if (e && e.kind === 'belt' && !e.fixed) { e.dir = d; world.dirty = true; return; }
-  if (!e) place(world, 'belt', x, y, d);
+  if (!e) place(world, id, x, y, d);
 }
 let drag = null;
 function dragTo(t) {
@@ -769,11 +785,11 @@ canvas.addEventListener('mousedown', (ev) => {
   holding = true;
   // 何も持っていないか、持っている物と同じ設備をクリックしたら、レシピ（選り分けは素材）を選ぶ
   const here = entAt(world, t.x, t.y);
-  if (!ui.tool || (here && here.id === ui.tool && ui.tool !== 'belt')) {
+  if (!ui.tool || (here && here.id === ui.tool && buildings[ui.tool].kind !== 'belt')) {
     if (choosable(here)) openPicker(here, ev);
     return;
   }
-  if (ui.tool === 'belt') {
+  if (buildings[ui.tool].kind === 'belt') {
     drag = { x: t.x, y: t.y };
     putBelt(t.x, t.y, ui.dir);
     changed();
@@ -921,7 +937,13 @@ function updateInfo() {
     else if (e.kind === 'overflow') s += '：先が詰まった物を倉庫へ戻す（余った物で止まらない）';
     else if (e.kind === 'emitter') s += emitterInfo(e);
     else if (e.kind === 'under') s += underInfo(e);
-    else if (e.item) s += `：${itemName(e.item.t)}`;
+    else if (e.item) {
+      s += `：${itemName(e.item.t)}`;
+      const rule = content.decayRules?.find((r) => r.from === e.item.t);
+      if (rule) s += `（あと${((rule.ticks - (e.item.age || 0)) / TPS).toFixed(1)}秒で${itemName(rule.to)}。冷気の中では止まる）`;
+    }
+    if (e.fast) s += '｜2.5倍の速さ';
+    if (e.priority) s += '：正面に入れられるときは正面へ、詰まっているときだけ左右へ';
   } else if (t && world.blocked[t.y * world.w + t.x] === 2) { name = '瓦礫'; s = '：あとの区画の依頼を達成すると片づく（どの依頼かは右の「瓦礫」）'; }
   const html = name ? `<b>${name}</b>${s}` : '';
   if (html !== lastInfo) { $('info').innerHTML = html; lastInfo = html; }

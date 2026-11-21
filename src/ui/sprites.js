@@ -9,6 +9,11 @@ export const ITEM_COLORS = {
   glassmix: '#e8efe0', glass: '#a8e6f0', lens: '#4aa8e8', fuel: '#9b6cf0',
   gearbox: '#b8862f', redplate: '#e8452c', steel: '#45607e', crystal: '#7e5cf0',
   spring: '#7d93ad', clockwork: '#e0b440', lantern: '#f2c94c',
+  // 第2部（絵はフェーズ14。今は色の丸）
+  refined: '#bff3ff', sludge: '#6b5a3e', refuel: '#c66cf0', floatmix: '#b9b08f', gravel: '#7f786c',
+  floatstone: '#9fd6c9', floatplank: '#c8a86a', spore: '#c9e6a3', moss: '#6fe0b0', drymoss: '#a9b67a',
+  thread: '#d8f0e6', canvas: '#efe6cf', mosspot: '#58c49a', balloon: '#e8d7a8', compass: '#d0a640',
+  hull: '#8a6a44', airship: '#f0c060',
 };
 
 const OUT = '#2b2118';
@@ -106,7 +111,8 @@ export function drawItem(ctx, id, cx, cy, size = 18) {
       break;
     default:
       ctx.fillStyle = c || '#999';
-      ctx.beginPath(); ctx.arc(cx, cy, size / 2, 0, 7); ctx.fill();
+      ctx.beginPath(); ctx.arc(cx, cy, size * 0.3, 0, 7); ctx.fill(); // 絵がまだない素材（第2部）：小さな丸に縁取り
+      ctx.strokeStyle = OUT; ctx.lineWidth = Math.max(1, size / 16); ctx.stroke();
   }
 }
 
@@ -126,6 +132,14 @@ export const MACHINE_STYLE = {
   still: { body: '#3f9fb0', kind: '魔力' },
   polisher: { body: '#4a7fc0', kind: '魔力' },
   workbench: { body: '#8a6a2a', kind: '魔力' },
+  // 第2部（絵はフェーズ14）
+  refiner: { body: '#3f8fa8', kind: 'エーテル' },
+  steeper: { body: '#4f7f8a', kind: 'エーテル' },
+  lightPost: { body: '#b8962a', kind: '光' },
+  planter: { body: '#4f8a52', kind: '育てる' },
+  spinner: { body: '#7a8a5a', kind: '育てる' },
+  loom: { body: '#8a7a5a', kind: '育てる' },
+  shipyard: { body: '#6a5a8a', kind: '総まとめ' },
 };
 
 // 範囲の色（盤面に薄く重ねる）
@@ -133,4 +147,5 @@ export const FIELD_TINT = {
   heat: 'rgba(255,110,30,0.24)',
   cold: 'rgba(60,150,255,0.24)',
   mana: 'rgba(140,90,230,0.16)',
+  light: 'rgba(255,214,90,0.26)',
 };

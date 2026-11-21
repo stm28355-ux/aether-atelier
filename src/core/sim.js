@@ -10,6 +10,13 @@
 // 揺れ（shake）：揺れる機械の周り2マスは揺れの範囲。そこに1マスでも入った fragile の機械は止まる。
 // 選り分け（sorter）：後ろから受け、選んだ素材だけ左右へ、残りは正面へ出す。
 // あふれ口（overflow）：ベルトと同じだが、先が詰まった物は倉庫へ戻す（余った物で止まらない）。
+// 第2部：
+// 副産物：出す物が2種類あるレシピは、正面から順番に出す。片方が詰まると、その分がたまって機械が止まる。
+// 時間で変わる（decayRules）：素材はベルトの上で時間がたつと変わる。pausedBy の範囲（冷気）の中では止まる。
+// 光（light）：灯り台の範囲。熱や冷気と重なっても打ち消し合わない。
+// 速いベルト（fast）：1マスを2刻みで進む（ふつうの2.5倍、毎分300個まで）。
+// 優先分岐（priority）：正面に入れられるときは正面へ、詰まっているときだけ左右へ順に。
+// 精製燃料：魔力炉で燃料2つ分。
 
 export const TPS = 10; // 1秒の刻み数
 export const BELT_TICKS = 5; // 1マス進むのにかかる刻み
@@ -17,7 +24,8 @@ export const DX = [1, 0, -1, 0];
 export const DY = [0, 1, 0, -1];
 export const UNDER_GAP = 4; // 下をくぐれるマス数
 export const FUEL_CAP = 4; // 魔力炉にためられる燃料
-const FIELDS = ['heat', 'cold', 'mana', 'shake'];
+const FIELDS = ['heat', 'cold', 'mana', 'shake', 'light'];
+const FUEL_VALUE = { fuel: 1, refuel: 2 }; // 魔力炉に入れたときの燃料の数
 export const SHAKE_RADIUS = 2;
 export const SYN_STEP = 1, SYN_MAX = 2, SYN_DEN = 4; // 相乗：1台ごとに 1/4（+25%）、2台まで
 
@@ -83,6 +91,8 @@ export function place(world, id, x, y, dir = 0, props = {}) {
     outs: [], feeders: [], rr: 0, lastFrom: null,
   };
   if (e.kind === 'belt' || e.kind === 'splitter') e.item = null;
+  if (def.fast) e.fast = true;
+  if (def.priority) e.priority = true;
   if (e.kind === 'sorter') { e.item = null; e.filter = props.filter ?? null; e.front = []; e.sides = []; }
   if (e.kind === 'overflow') { e.item = null; e.wait = 0; }
   if (e.kind === 'under') { e.item = null; e.role = props.role === 'out' ? 'out' : 'in'; e.partner = null; e.tube = []; }
@@ -95,7 +105,7 @@ export function place(world, id, x, y, dir = 0, props = {}) {
   if (e.kind === 'sink') e.count = {};
   if (e.kind === 'machine') {
     e.recipe = props.recipe ?? def.recipes[0] ?? null;
-    e.inbuf = {}; e.outbuf = {}; e.left = 0; e.status = 'waiting'; e.acc = 0; e.syn = 0; e.shaken = false;
+    e.inbuf = {}; e.outbuf = {}; e.left = 0; e.status = 'waiting'; e.acc = 0; e.syn = 0; e.shaken = false; e.ot = 0;
   }
   world.ents.push(e);
   for (let j = 0; j < e.h; j++) for (let i = 0; i < e.w; i++) world.grid[(y + j) * world.w + x + i] = e;
@@ -328,7 +338,10 @@ export function rebuild(world) {
       for (const d of [(e.dir + 3) & 3, (e.dir + 1) & 3]) addOut(world, e, e.x, e.y, d);
       e.sides = e.outs.filter((t) => !e.front.includes(t));
     } else if (e.kind === 'splitter') {
-      for (const d of [e.dir, (e.dir + 3) & 3, (e.dir + 1) & 3]) addOut(world, e, e.x, e.y, d);
+      addOut(world, e, e.x, e.y, e.dir);
+      e.front = e.outs.slice();
+      for (const d of [(e.dir + 3) & 3, (e.dir + 1) & 3]) addOut(world, e, e.x, e.y, d);
+      e.sides = e.outs.filter((t) => !e.front.includes(t));
     } else if (e.kind === 'machine') {
       const horizontal = e.dir === 0 || e.dir === 2;
       const n = horizontal ? e.h : e.w;
@@ -339,7 +352,7 @@ export function rebuild(world) {
       }
     }
     if (e.rr >= e.outs.length) e.rr = 0;
-    if (e.kind === 'sorter' && e.rr >= e.sides.length) e.rr = 0;
+    if ((e.kind === 'sorter' || e.priority) && e.rr >= e.sides.length) e.rr = 0;
     if (e.lastFrom && !ents.includes(e.lastFrom)) e.lastFrom = null;
   }
   // 下流から先に動かす順番（詰まっていない列がまとめて進むように）
@@ -396,6 +409,8 @@ function push(world, from, target, item) {
       if (target.item) return false;
       if (target.feeders.length > 1 && !myTurn(target, from)) return false;
       item.p = 0;
+      if (target.fast) item.p = BELT_TICKS - 2; // 速いベルトは2刻みで次へ
+      item.p0 = item.p;
       target.item = item;
       target.lastFrom = from;
       return true;
@@ -409,8 +424,8 @@ function push(world, from, target, item) {
       return true;
     }
     case 'emitter':
-      if (!target.fuelIn || item.t !== 'fuel' || target.fuel >= FUEL_CAP) return false;
-      target.fuel++;
+      if (!target.fuelIn || !FUEL_VALUE[item.t] || target.fuel + FUEL_VALUE[item.t] > FUEL_CAP) return false;
+      target.fuel += FUEL_VALUE[item.t];
       return true;
     case 'sink':
       target.count[item.t] = (target.count[item.t] || 0) + 1;
@@ -424,6 +439,15 @@ function push(world, from, target, item) {
 }
 
 function tryOut(world, e, item) {
+  if (e.priority) { // 優先分岐：正面が先、詰まっていれば左右へ順に
+    if (e.front.length && push(world, e, e.front[0], item)) return true;
+    const n = e.sides.length;
+    for (let k = 0; k < n; k++) {
+      const i = (e.rr + k) % n;
+      if (push(world, e, e.sides[i], item)) { e.rr = (i + 1) % n; return true; }
+    }
+    return false;
+  }
   if (e.kind === 'sorter') {
     if (item.t !== e.filter) return e.front.length > 0 && push(world, e, e.front[0], item);
     const n = e.sides.length;
@@ -452,14 +476,26 @@ function applyFields(world, h) {
   }
 }
 
+// 時間で変わる：ベルトの上で時間がたつと変わる（下をくぐっている間も進む）。pausedBy の範囲の中では止まる
+function applyDecay(world, h) {
+  const it = h.item;
+  const rule = world.data.decayRules?.find((r) => r.from === it.t);
+  if (!rule) return;
+  if (rule.pausedBy && !h.virtual && fieldActive(world, rule.pausedBy, h.x, h.y)) return;
+  it.age = (it.age || 0) + 1;
+  if (it.age >= rule.ticks) { it.t = rule.to; it.age = 0; it.ex = 0; }
+}
+
 // 魔力が届かない理由：範囲の外（no-mana）か、届く魔力炉はあるが燃えていない（no-fuel）か
 const noPower = (m) => (m.covered ? 'no-fuel' : 'no-mana');
 
 function stepMachine(world, m) {
   const r = world.data.recipes[m.recipe];
   if (!r) { m.status = 'no-recipe'; return; }
-  for (const t in m.outbuf) {
-    if (m.outbuf[t] > 0 && tryOut(world, m, { t, p: 0, ex: 0 })) { m.outbuf[t]--; break; }
+  const outs = Object.keys(r.out);
+  for (let k = 0; k < outs.length; k++) { // 出す物が2種類あれば、順番に出す
+    const i = (m.ot + k) % outs.length, t = outs[i];
+    if ((m.outbuf[t] || 0) > 0 && tryOut(world, m, { t, p: 0, ex: 0 })) { m.outbuf[t]--; m.ot = (i + 1) % outs.length; break; }
   }
   const powered = !m.needsMana || m.pn > 0;
   m.slow = m.needsMana && powered && m.pn < m.pd;
@@ -493,6 +529,7 @@ export function step(world) {
     if (!h.item) continue;
     if (h.item.p < BELT_TICKS) h.item.p++;
     applyFields(world, h);
+    applyDecay(world, h);
   }
   for (const s of world.sources) if (s.cool > 0) s.cool--;
   for (const h of world.order) {

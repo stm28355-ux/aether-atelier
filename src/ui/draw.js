@@ -28,7 +28,7 @@ function drawUnder(ctx, e, role, ghost) {
   arrow(ctx, cx - DX[d] * 4, cy - DY[d] * 4, e.dir, 8, ghost ? '#2b2118' : '#efe9de');
   if (!ghost && !e.partner) { ctx.strokeStyle = '#c0392b'; ctx.lineWidth = 2; ctx.strokeRect(x + 2, y + 2, C - 4, C - 4); }
 }
-const RANGE = { heat: ['rgba(255,110,30,0.18)', '#d2571a'], cold: ['rgba(60,150,255,0.18)', '#2f7fd0'], mana: ['rgba(140,90,230,0.12)', '#7a4fd8'], shake: ['rgba(90,80,70,0.10)', '#6b5f52'] };
+const RANGE = { heat: ['rgba(255,110,30,0.18)', '#d2571a'], cold: ['rgba(60,150,255,0.18)', '#2f7fd0'], mana: ['rgba(140,90,230,0.12)', '#7a4fd8'], shake: ['rgba(90,80,70,0.10)', '#6b5f52'], light: ['rgba(255,214,90,0.22)', '#b8962a'] };
 
 // 揺れの範囲：斜めの細い線
 function hatch(ctx, x, y) {
@@ -76,16 +76,21 @@ function drawEnt(ctx, world, e, opts) {
   const cx = x + w / 2, cy = y + h / 2;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  if (e.kind === 'belt') {
+  if (e.kind === 'belt' && e.fast) { // 速いベルト：青みの灰に二重の矢印
+    ctx.fillStyle = '#7f8ea0';
+    ctx.fillRect(x + 1, y + 1, C - 2, C - 2);
+    arrow(ctx, cx - DX[e.dir] * 5, cy - DY[e.dir] * 5, e.dir, 9, '#dfe7f2');
+    arrow(ctx, cx + DX[e.dir] * 5, cy + DY[e.dir] * 5, e.dir, 9, '#dfe7f2');
+  } else if (e.kind === 'belt') {
     ctx.fillStyle = '#9b958c';
     ctx.fillRect(x + 1, y + 1, C - 2, C - 2);
     arrow(ctx, cx, cy, e.dir, 10, '#c9c3b8');
   } else if (e.kind === 'under') {
     drawUnder(ctx, e, e.role, false);
   } else if (e.kind === 'splitter') {
-    ctx.fillStyle = '#5f7391';
+    ctx.fillStyle = e.priority ? '#4f6a5e' : '#5f7391';
     ctx.fillRect(x + 1, y + 1, C - 2, C - 2);
-    for (const d of [e.dir, (e.dir + 3) & 3, (e.dir + 1) & 3]) arrow(ctx, cx + DX[d] * 11, cy + DY[d] * 11, d, 6, '#dfe7f2');
+    for (const d of [e.dir, (e.dir + 3) & 3, (e.dir + 1) & 3]) arrow(ctx, cx + DX[d] * 11, cy + DY[d] * 11, d, e.priority && d === e.dir ? 9 : 6, e.priority && d === e.dir ? '#ffd166' : '#dfe7f2');
   } else if (e.kind === 'sorter') {
     // 選り分け：真ん中に選んだ素材、左右に黄色の矢印（選んだ物）、正面に白の矢印（残り）
     ctx.fillStyle = '#6a5a86';
@@ -253,7 +258,7 @@ function drawArtEnt(ctx, world, e, opts) {
   }
 }
 
-function drawItemOnBelt(ctx, h, alpha) {
+function drawItemOnBelt(ctx, world, h, alpha) {
   const it = h.item;
   const tx = (h.x + 0.5) * C, ty = (h.y + 0.5) * C;
   let fx = tx, fy = ty;
@@ -262,8 +267,18 @@ function drawItemOnBelt(ctx, h, alpha) {
     fx = Math.max(from.x, Math.min(from.x + from.w - 1, h.x)) * C + C / 2;
     fy = Math.max(from.y, Math.min(from.y + from.h - 1, h.y)) * C + C / 2;
   }
-  const f = Math.min(1, (it.p + (it.p < BELT_TICKS ? alpha : 0)) / BELT_TICKS);
-  drawItem(ctx, it.t, fx + (tx - fx) * f, fy + (ty - fy) * f, 32);
+  const p0 = it.p0 || 0;
+  const f = Math.min(1, (it.p - p0 + (it.p < BELT_TICKS ? alpha : 0)) / (BELT_TICKS - p0));
+  const px = fx + (tx - fx) * f, py = fy + (ty - fy) * f;
+  drawItem(ctx, it.t, px, py, 32);
+  if (it.age) { // 時間で変わる素材：残りの時間を小さな輪で
+    const rule = world.data.decayRules?.find((r) => r.from === it.t);
+    if (rule) {
+      const left = 1 - it.age / rule.ticks;
+      ctx.strokeStyle = left < 0.34 ? '#c0392b' : '#2b2118'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(px + 11, py - 11, 4, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * left); ctx.stroke();
+    }
+  }
 }
 
 function drawRubble(ctx, x, y) {
@@ -296,6 +311,7 @@ export function draw(ctx, world, opts = {}) {
     if (h && c) { ctx.fillStyle = 'rgba(120,120,120,0.22)'; ctx.fillRect(x * C, y * C, C, C); }
     else if (h) { ctx.fillStyle = FIELD_TINT.heat; ctx.fillRect(x * C, y * C, C, C); }
     else if (c) { ctx.fillStyle = FIELD_TINT.cold; ctx.fillRect(x * C, y * C, C, C); }
+    if (world.fields.light?.[i]) { ctx.fillStyle = FIELD_TINT.light; ctx.fillRect(x * C + 3, y * C + 3, C - 6, C - 6); }
     if (opts.showShake && world.fields.shake[i]) hatch(ctx, x, y);
     if (world.fields.mana[i]) {
       ctx.fillStyle = '#8a5ae6';
@@ -318,7 +334,7 @@ export function draw(ctx, world, opts = {}) {
   ctx.setLineDash([]);
 
   for (const e of world.ents) drawEnt(ctx, world, e, opts);
-  for (const e of world.ents) if (isHolder(e) && e.item) drawItemOnBelt(ctx, e, opts.alpha || 0);
+  for (const e of world.ents) if (isHolder(e) && e.item) drawItemOnBelt(ctx, world, e, opts.alpha || 0);
 
   // 選んでいる範囲
   if (opts.sel) {
