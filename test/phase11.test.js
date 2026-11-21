@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import content from '../src/data/content.js';
 import { createGame, run, goals, recipesFor, unlocked } from '../src/core/game.js';
 import { rate, canPlace, serialize, load } from '../src/core/sim.js';
-import { STAGES2 } from './models2.js';
+import { STAGES2, MECH } from './models2.js';
 
 const fresh = (state) => createGame(content, { v: 1, done: {}, cleared: {}, made: {}, layouts: {}, ...state });
 const last = (id) => STAGES2[id][STAGES2[id].length - 1];
@@ -35,11 +35,14 @@ test('区8：澱をよけないと精製燃料は作れない。選り分けで�
   assert.equal(rate(g.worlds.d8, 'refuel'), 0);
 });
 
-test('区9：浮遊石を毎分30。右の浸し槽へ行く道を速いベルトからふつうのベルトにすると、浮遊石の素が石くずになって減る', () => {
+test('区9：お手本（人の図面）で浮遊石40。速いベルトで組んだ形（30）は、ふつうのベルトにすると浮遊石の素が石くずになって減る', () => {
   const g = part2();
   run(g, 5 * 60 * 10);
-  assert.equal(rate(g.worlds.d9, 'floatstone'), 30);
-  const slow = last('d9').map((o) => (o.id === 'fastBelt' ? { ...o, id: 'belt' } : o));
+  assert.equal(rate(g.worlds.d9, 'floatstone'), 40);
+  const f = part2({ d9: MECH.d9 });
+  run(f, 5 * 60 * 10);
+  assert.equal(rate(f.worlds.d9, 'floatstone'), 30);
+  const slow = MECH.d9.map((o) => (o.id === 'fastBelt' ? { ...o, id: 'belt' } : o));
   const s = part2({ d9: slow });
   run(s, 5 * 60 * 10);
   assert.ok(rate(s.worlds.d9, 'floatstone') < 30, `ふつうのベルト ${rate(s.worlds.d9, 'floatstone')}`);
@@ -62,10 +65,10 @@ test('区10：水の上には置けない。下をくぐるベルトなら水の
   assert.equal(canPlace(w2, 'belt', 13, 3).reason, '水の上には置けない');
 });
 
-test('区10：浮き板を毎分20で、大目標「浮き橋がかかる」', () => {
+test('区10：浮き板を毎分30で、大目標「浮き橋がかかる」', () => {
   const g = part2();
   run(g, 5 * 60 * 10);
-  assert.equal(rate(g.worlds.d10, 'floatplank'), 20);
+  assert.equal(rate(g.worlds.d10, 'floatplank'), 30);
   assert.equal(g.state.done.d10, 2);
   const bridge = goals(g).find((x) => x.id === 'bridge');
   assert.ok(bridge.reached && bridge.flowing);

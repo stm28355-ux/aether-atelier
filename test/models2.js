@@ -1,4 +1,10 @@
 // 第2部のお手本の配置（区8〜）。models.js と同じ形
+import content from '../src/data/content.js';
+import { decode } from '../src/core/blueprint.js';
+import { PLAYER } from './player-blueprints.js';
+
+// 人が送ってくれた図面（区画をまるごと写したもの）を、お手本の配置の形に直す
+const fromPlayer = (id) => { const { bp } = decode(PLAYER[id], content); return bp.ents.map((e) => ({ ...e, x: e.x + bp.x, y: e.y + bp.y })); };
 const E = 0, S = 1, W = 2, N = 3;
 const b = (x, y, dir) => ({ id: 'belt', x, y, dir });
 const fb = (x, y, dir) => ({ id: 'fastBelt', x, y, dir });
@@ -97,4 +103,7 @@ const d15 = [
   ...row([9, 10, 11, 12], 4, E), // 飛空艇
 ];
 
-export const STAGES2 = { d8: [d8a, d8b], d9: [d9], d10: [d10], d11: [d11], d12: [d12], d13: [d13a, d13b], d14: [d14], d15: [d15] };
+// 依頼を上げた区画（11/21：区9 浮遊石40、区10 浮き板30、区12 苔120）は、人の図面をお手本にする。
+// 自分で組んだ形（浮遊石30・浮き板20・苔90）は、仕組みを確かめるテストに残す
+export const MECH = { d9, d10, d12 };
+export const STAGES2 = { d8: [d8a, d8b], d9: [fromPlayer('d9')], d10: [fromPlayer('d10')], d11: [d11], d12: [fromPlayer('d12')], d13: [d13a, d13b], d14: [d14], d15: [d15] };

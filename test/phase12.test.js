@@ -6,7 +6,7 @@ import { createGame, run, goals, replaceWithBlueprint } from '../src/core/game.j
 import { rate } from '../src/core/sim.js';
 import { decode } from '../src/core/blueprint.js';
 import { MODEL } from './models.js';
-import { STAGES2 } from './models2.js';
+import { MECH } from './models2.js';
 import { PLAYER } from './player-blueprints.js';
 
 const ALL = content.districts.map((d) => d.id);
@@ -25,7 +25,7 @@ test('区11：胞子は毎分30だけ。光に通して全部光る苔にする�
 test('区12の苔の口は、区11が納めた苔だけを受け取る（区12が納めた苔は倉庫を回って戻らない）', () => {
   const g = everything();
   run(g, 5 * 60 * 10);
-  assert.equal(rate(g.worlds.d12, 'moss'), 90);
+  assert.equal(rate(g.worlds.d12, 'moss'), 150); // 人の図面（育て床8台）
   const port = g.worlds.d12.ents.find((e) => e.kind === 'source' && e.item === 'moss');
   assert.equal(port.from, 'd11');
   // 区11を止めると、区12には苔が届かない（区12の苔が戻ってこない）
@@ -34,8 +34,11 @@ test('区12の苔の口は、区11が納めた苔だけを受け取る（区12�
   assert.equal(rate(s.worlds.d12, 'moss'), 0);
 });
 
-test('区12：育て床から出た苔を戻さないと、毎分90に届かない', () => {
-  const noLoop = STAGES2.d12[0].filter((o) => !(o.y === 0 || (o.x === 12 && o.y === 1)))
+test('区12：育て床4台の形で、出た苔を戻すと毎分90、戻さないと届かない', () => {
+  const loop = everything({ d12: MECH.d12 });
+  run(loop, 5 * 60 * 10);
+  assert.equal(rate(loop.worlds.d12, 'moss'), 90);
+  const noLoop = MECH.d12.filter((o) => !(o.y === 0 || (o.x === 12 && o.y === 1)))
     .concat([{ id: 'belt', x: 12, y: 1, dir: 0 }]);
   const g = everything({ d12: noLoop });
   run(g, 5 * 60 * 10);

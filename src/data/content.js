@@ -294,7 +294,7 @@ export const districts = [
     base: ['steeper', 'fastBelt'], recipes: ['floatmix'], limits: {},
     requests: [
       { targets: { floatstone: 15 }, unlock: [], reward: 'なし', clears: [['d8', 'a']] },
-      { targets: { floatstone: 30 }, unlock: [], opens: 'd10', reward: '次の区画「浮き橋の桟橋」', clears: [['d7', 'b']] },
+      { targets: { floatstone: 40 }, unlock: [], opens: 'd10', reward: '次の区画「浮き橋の桟橋」', clears: [['d7', 'b']] },
     ],
   },
   {
@@ -315,7 +315,7 @@ export const districts = [
     requests: [
       { targets: { floatplank: 10 }, unlock: [], reward: 'なし', clears: [['d8', 'b'], ['d9', 'a']] },
       {
-        targets: { floatplank: 20 }, unlock: [], opens: 'd11', reward: '大目標「浮き橋がかかる」、次の区画「光苔の庭」', clears: [['d9', 'b']],
+        targets: { floatplank: 30 }, unlock: [], opens: 'd11', reward: '大目標「浮き橋がかかる」、次の区画「光苔の庭」', clears: [['d9', 'b']],
         goal: { id: 'bridge', title: '浮き橋がかかる', story: '港の水の上に、浮き板を並べた橋が静かに浮かんだ。霧の向こうの島へ、歩いて渡れるようになった。' },
       },
     ],
@@ -356,7 +356,7 @@ export const districts = [
     base: ['planter', 'prioritySplitter'], recipes: [], limits: {},
     requests: [
       { targets: { moss: 60 }, unlock: [], reward: 'なし', clears: [['d11', 'a']] },
-      { targets: { moss: 90 }, unlock: [], opens: 'd13', reward: '次の区画「帆と糸の工房」', clears: [['d10', 'b']] },
+      { targets: { moss: 120 }, unlock: [], opens: 'd13', reward: '次の区画「帆と糸の工房」', clears: [['d10', 'b']] },
     ],
   },
   {
