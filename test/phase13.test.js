@@ -46,7 +46,7 @@ test('区15：造船台を2つの魔力炉で挟み、飛空艇を毎分1。大�
 });
 
 test('町の地図：全部の区画に建物があり、重ならず、クリックで当たる', () => {
-  for (const d of content.districts) assert.ok(SPOTS[d.id], d.id);
+  for (const d of content.districts) if (!d.isolated) assert.ok(SPOTS[d.id], d.id); // おまけの1枚の工房は地図の一覧から入る
   const boxes = Object.entries(SPOTS).map(([id, [x, y]]) => ({ id, x, y }));
   for (const a of boxes) for (const b of boxes) {
     if (a.id < b.id) assert.ok(Math.abs(a.x - b.x) >= 32 || Math.abs(a.y - b.y) >= 30, `${a.id} と ${b.id}`);

@@ -67,6 +67,8 @@ export const buildings = {
   under: { name: '下をくぐるベルト', kind: 'under', w: 1, h: 1 },
   sorter: { name: '選り分け', kind: 'sorter', w: 1, h: 1 },
   overflow: { name: 'あふれ口', kind: 'overflow', w: 1, h: 1 },
+  // 区16（1枚の工房）だけで置ける、原料を出す倉庫の口
+  port: { name: '倉庫の出す口', kind: 'source', free: true, w: 1, h: 1 },
   // 第2部の道具
   fastBelt: { name: '速いベルト', kind: 'belt', fast: true, w: 1, h: 1 },
   prioritySplitter: { name: '優先分岐', kind: 'splitter', priority: true, w: 1, h: 1 },
@@ -427,12 +429,27 @@ export const districts = [
     base: ['shipyard'], recipes: [], limits: {},
     requests: [
       {
-        targets: { airship: 1 }, unlock: [], reward: '大目標「飛空艇が飛ぶ」', clears: [['d14', 'a'], ['d14', 'b']],
+        targets: { airship: 1 }, unlock: [], opens: 'd16', reward: '大目標「飛空艇が飛ぶ」、おまけの区画「1枚の工房」', clears: [['d14', 'a'], ['d14', 'b']],
         goal: { id: 'airship', title: '飛空艇が飛ぶ', story: '浮き袋がふくらみ、船体がゆっくりと造船所を離れた。霧の町の空を、工房の飛空艇が渡っていく。' },
       },
     ],
   },
+  // ---- おまけ：1枚の工房（フェーズ16の検証から）----
+  // 原料の口を、どの原料でも・どこにでも・いくつでも置ける。前の区画からは何も届かず、倉庫にも渡さない。
+  // 広さは、AI が組んだお手本（test/onemap.js。飛空艇を毎分1）が入る 26×27
+  {
+    id: 'd16', name: '区16 1枚の工房', sys: '総まとめ', leyline: false, part: 3, isolated: true, freePorts: true, scale: 0.7,
+    intro: '1枚の盤面で、原料から飛空艇まで作る。倉庫の出す口（運ぶのタブ）を、木材・鉱石・砂・エーテル水・胞子のどれでも、どこにでも、いくつでも置ける（置いてからクリックで原料を選ぶ）。前の区画からは何も届かず、作った物は倉庫に入らない。魔力は要る（地脈はない）。',
+    w: 26, h: 27, walls: [], rubble: [],
+    fixed: [{ id: 'sink', x: 18, y: 15, dir: 0 }],
+    base: ['port'], recipes: [], limits: {},
+    requests: [
+      { targets: { airship: 1 }, unlock: [], reward: 'なし' },
+    ],
+  },
 ];
+// 区16の倉庫の口で選べる原料
+export const RAW_ITEMS = ['wood', 'ore', 'sand', 'aether', 'spore'];
 
 // フェーズ10の試作の区画（URL に ?trial を付けたときだけ開く。本編のセーブとは別）
 // 新しい仕組みを1つずつ試す。地脈はあり（魔力のことは考えなくてよい）
@@ -509,4 +526,4 @@ export const upcoming = draft2.districts
   .filter((d) => !districts.some((x) => x.id === d.id))
   .map((d) => ({ id: d.id, name: d.name, sys: d.sys.replace(/（.*）/, '') }));
 
-export default { items, buildings, recipes, fieldRules, decayRules, districts, upcoming, gatedRecipes };
+export default { items, buildings, recipes, fieldRules, decayRules, districts, upcoming, gatedRecipes, RAW_ITEMS };

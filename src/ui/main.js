@@ -2,7 +2,7 @@
 import mainContent, { trialDistricts } from '../data/content.js';
 import {
   createGame, step as stepGame, layoutChanged, resetDistrict, unlocked, perMin,
-  districtDef, save, recipesFor, goals, clearedBy,
+  districtDef, save, recipesFor, goals, clearedBy, placeableIn,
   setLayout, pasteCheck, pasteInto, districtBlueprint, replaceWithBlueprint,
 } from '../core/game.js';
 import { copyArea, rotate as rotateBp, encode, decode } from '../core/blueprint.js';
@@ -71,6 +71,12 @@ function renderMap() {
       const head = document.createElement('p');
       head.className = 'hint later part';
       head.textContent = '第1部：機工と炉と霜（大目標「時計塔が動く」「町に灯りがつく」）';
+      grid.append(head);
+    }
+    if (!TRIAL && id === 'd16') { // おまけ
+      const head = document.createElement('p');
+      head.className = 'hint later part';
+      head.textContent = 'おまけ：1枚の工房（大目標「飛空艇が飛ぶ」で開く。原料の口を自由に置いて、1枚の盤面で飛空艇まで）';
       grid.append(head);
     }
     if (!TRIAL && id === 'd8') { // 第2部の始まり
@@ -293,13 +299,14 @@ function openDistrict(id) {
   world = game.worlds[id];
   ui.tool = null;
   const dpr = window.devicePixelRatio || 1;
-  canvas.width = def.w * CELL * dpr;
-  canvas.height = def.h * CELL * dpr;
-  canvas.style.width = `${def.w * CELL}px`;
-  canvas.style.height = `${def.h * CELL}px`;
-  canvas.getContext('2d').setTransform(dpr, 0, 0, dpr, 0, 0);
+  const k = def.scale || 1; // 大きい区画は縮めて見せる（1枚の工房）
+  canvas.width = def.w * CELL * k * dpr;
+  canvas.height = def.h * CELL * k * dpr;
+  canvas.style.width = `${def.w * CELL * k}px`;
+  canvas.style.height = `${def.h * CELL * k}px`;
+  canvas.getContext('2d').setTransform(dpr * k, 0, 0, dpr * k, 0, 0);
   // 真ん中の列は盤面の幅に固定する（説明文の長さで列の幅が変わると、盤面がずれてカーソルの下のマスが変わる）
-  $('center').style.width = `${def.w * CELL + 2}px`;
+  $('center').style.width = `${def.w * CELL * k + 2}px`;
   $('intro').textContent = def.intro;
   ui.pasting = false; ui.selecting = false; clearSel(); holding = false;
   lastSnap = snap();
@@ -308,7 +315,7 @@ function openDistrict(id) {
 
 const countOf = (id) => world.ents.filter((e) => e.id === id).length;
 const overLimit = (id) => def.limits[id] != null && countOf(id) >= def.limits[id];
-const placeable = () => unlocked(game).filter((id) => buildings[id].kind !== 'source' && buildings[id].kind !== 'sink');
+const placeable = () => (def ? placeableIn(game, ui.district) : unlocked(game).filter((id) => buildings[id].kind !== 'source' && buildings[id].kind !== 'sink'));
 
 function changed() {
   layoutChanged(game, ui.district);
@@ -369,6 +376,7 @@ const TOOL_NOTE = {
   under: '入口を置き、同じ向きで前に出口を置く（間は4マスまで）。くぐっている間は範囲が効かない',
   sorter: '後ろから受けて、選んだ素材だけ左右へ、残りは正面へ。置いてからクリックで素材を選ぶ',
   overflow: '先が詰まった物を倉庫へ戻す。混ぜたベルトが、余った物で止まらない',
+  port: '原料（木材・鉱石・砂・エーテル水・胞子）を毎分120個まで出す。置いてからクリックで原料を選ぶ。1枚の工房だけで置ける',
   fastBelt: '物を運ぶ。ふつうのベルトの2.5倍の速さ（1マス0.2秒、毎分300個まで）。ドラッグで引く。ふつうのベルトの上に引くと置き換わる',
   prioritySplitter: '後ろから受けて、正面に入れられるときは正面へ。正面が詰まっているときだけ左右へ順に出す',
 };
@@ -421,7 +429,7 @@ function switchTab(stepN) {
 }
 
 // 置く物の2行目：何を作るか（材料 → できる物の絵）
-const TOOL_SHORT = { belt: 'ドラッグで引く', splitter: '正面・左・右へ順に出す', under: '4マスまで下を通す', sorter: '選んだ素材を左右へ', overflow: '詰まった物を倉庫へ戻す', fastBelt: '2.5倍の速さ。ドラッグで引く', prioritySplitter: '正面が先、詰まったら左右へ' };
+const TOOL_SHORT = { port: '原料を出す（クリックで選ぶ）', belt: 'ドラッグで引く', splitter: '正面・左・右へ順に出す', under: '4マスまで下を通す', sorter: '選んだ素材を左右へ', overflow: '詰まった物を倉庫へ戻す', fastBelt: '2.5倍の速さ。ドラッグで引く', prioritySplitter: '正面が先、詰まったら左右へ' };
 const FIELD_NAME = { heat: '熱', cold: '冷気', mana: '魔力', light: '光' };
 function makesHtml(id) {
   const b = buildings[id];
@@ -580,7 +588,11 @@ function closePicker() { picking = null; $('picker').classList.remove('show'); }
 function openPicker(e, ev) {
   const box = $('picker');
   let html = '';
-  if (e.kind === 'sorter') {
+  if (e.kind === 'source') {
+    html = '<div class="pk-t">倉庫から出す原料を選ぶ</div><div class="pk-items">'
+      + content.RAW_ITEMS.map((t) => `<button data-item="${t}" class="${e.item === t ? 'on' : ''}" title="${itemName(t)}">${dot(t)}${itemName(t)}</button>`).join('')
+      + '</div>';
+  } else if (e.kind === 'sorter') {
     const known = Object.keys(items).filter((t) => game.state.seen?.[t] || game.state.made?.[t]);
     html = '<div class="pk-t">左右へ出す素材を選ぶ</div><div class="pk-items">'
       + known.map((t) => `<button data-filter="${t}" class="${e.filter === t ? 'on' : ''}" title="${itemName(t)}">${dot(t)}${itemName(t)}</button>`).join('')
@@ -598,6 +610,9 @@ function openPicker(e, ev) {
   box.classList.add('show');
   picking = e;
   paintIcons();
+  for (const b of box.querySelectorAll('[data-item]')) {
+    b.onclick = () => { if (picking) { picking.item = b.dataset.item; ui.portItem = picking.item; world.dirty = true; changed(); } closePicker(); };
+  }
   for (const b of box.querySelectorAll('[data-filter]')) {
     b.onclick = () => { if (picking) { picking.filter = b.dataset.filter || null; ui.filter = picking.filter; changed(); } closePicker(); };
   }
@@ -608,13 +623,14 @@ function openPicker(e, ev) {
     };
   }
 }
-const choosable = (e) => e && !e.fixed && (e.kind === 'sorter' || (e.kind === 'machine' && recipesFor(game, e.id).length > 1));
+const choosable = (e) => e && !e.fixed && (e.kind === 'sorter' || (e.kind === 'source' && buildings[e.id].free) || (e.kind === 'machine' && recipesFor(game, e.id).length > 1));
 window.addEventListener('mousedown', (ev) => { if (picking && !$('picker').contains(ev.target)) closePicker(); }, true);
 
 // ---- 操作 ----
 function tileAt(ev) {
   const r = canvas.getBoundingClientRect();
-  return { x: Math.floor((ev.clientX - r.left) / CELL), y: Math.floor((ev.clientY - r.top) / CELL) };
+  const k = def.scale || 1;
+  return { x: Math.floor((ev.clientX - r.left) / (CELL * k)), y: Math.floor((ev.clientY - r.top) / (CELL * k)) };
 }
 function putBelt(x, y, d) {
   const id = buildings[ui.tool]?.kind === 'belt' ? ui.tool : 'belt';
@@ -735,6 +751,7 @@ function pipette() {
   ui.dir = e.dir;
   if (e.recipe) ui.recipe[e.id] = e.recipe;
   if (e.kind === 'sorter') ui.filter = e.filter;
+  if (e.kind === 'source') ui.portItem = e.item;
   const tab = TABS.find((g) => g.has(buildings[e.id]));
   if (tab) ui.tab = tab.id;
   renderPalette(); renderEditBar();
@@ -844,11 +861,13 @@ canvas.addEventListener('mousedown', (ev) => {
     const props = {};
     if (ui.tool === 'under') props.role = underRole(t.x, t.y, ui.dir);
     if (ui.tool === 'sorter') props.filter = ui.filter;
+    if (buildings[ui.tool].free) props.item = ui.portItem || 'wood';
     if (ui.recipe[ui.tool] && recipesFor(game, ui.tool).includes(ui.recipe[ui.tool])) props.recipe = ui.recipe[ui.tool];
     const e = place(world, ui.tool, t.x, t.y, ui.dir, props);
     if (!e) return;
     changed();
     if (e.kind === 'sorter' && !e.filter) openPicker(e, ev); // 置いたらすぐ素材を選ぶ
+    else if (e.kind === 'source' && !ui.portItem) { ui.portItem = e.item; openPicker(e, ev); } // はじめての倉庫の口は、原料を選ぶ窓
     else if (choosable(e) && !ui.recipe[e.id]) { ui.recipe[e.id] = e.recipe; openPicker(e, ev); } // レシピが選べる機械は、はじめて置いたときに窓を出す
     if (overLimit(ui.tool)) { ui.tool = null; renderPalette(); }
   }

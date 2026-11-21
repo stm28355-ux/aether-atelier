@@ -12,6 +12,7 @@ function pick(e) {
   if (e.recipe) o.recipe = e.recipe;
   if (e.role) o.role = e.role;
   if (e.filter) o.filter = e.filter;
+  if (e.kind === 'source' && e.item) o.item = e.item; // 1枚の工房の倉庫の口
   return o;
 }
 
@@ -69,6 +70,7 @@ export function paste(world, bp, ox, oy) {
       if (e.recipe && here.recipe !== e.recipe) setRecipe(world, here, e.recipe);
       if (here.kind === 'sorter') here.filter = e.filter ?? null;
       if (here.kind === 'under' && e.role) here.role = e.role;
+      if (here.kind === 'source' && e.item) here.item = e.item;
       world.dirty = true;
     } else place(world, e.id, x, y, e.dir, e);
     n++;
@@ -87,6 +89,7 @@ export function encode(bp) {
     if (e.recipe) p.r = e.recipe;
     if (e.role) p.o = e.role;
     if (e.filter) p.f = e.filter;
+    if (e.item) p.i = e.item;
     return Object.keys(p).length ? [e.id, e.x, e.y, e.dir, p] : [e.id, e.x, e.y, e.dir];
   }) };
   if (bp.d) { o.d = bp.d; o.x = bp.x; o.y = bp.y; }
@@ -108,7 +111,7 @@ export function decode(str, data) {
     if (!Array.isArray(a)) return { error: '図面の中身が読めない' };
     const [id, x, y, dir, p = {}] = a;
     const b = data.buildings[id];
-    if (!b || b.kind === 'source' || b.kind === 'sink') return { error: `知らない設備がある（${id}）` };
+    if (!b || (b.kind === 'source' && !b.free) || b.kind === 'sink') return { error: `知らない設備がある（${id}）` };
     if (!int(x) || !int(y) || ![0, 1, 2, 3].includes(dir) || x + b.w > o.w || y + b.h > o.h) return { error: '図面の中身が読めない' };
     for (let j = 0; j < b.h; j++) for (let i = 0; i < b.w; i++) {
       const k = (y + j) * o.w + x + i;
@@ -119,6 +122,7 @@ export function decode(str, data) {
     if (p.r) { if (!(b.recipes || []).includes(p.r)) return { error: `${b.name}のレシピが読めない` }; e.recipe = p.r; }
     if (p.o) { if (b.kind !== 'under' || !['in', 'out'].includes(p.o)) return { error: '図面の中身が読めない' }; e.role = p.o; }
     if (p.f) { if (b.kind !== 'sorter' || !data.items[p.f]) return { error: '選り分けの素材が読めない' }; e.filter = p.f; }
+    if (b.kind === 'source') { if (!(data.RAW_ITEMS || []).includes(p.i)) return { error: '倉庫の口の原料が読めない' }; e.item = p.i; }
     ents.push(e);
   }
   const bp = { w: o.w, h: o.h, ents };

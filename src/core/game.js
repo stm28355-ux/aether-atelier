@@ -137,7 +137,7 @@ export function districtBlueprint(game, id) {
 // まだ使えない設備と、台数の上限を超える設備を調べる（same：置いてある同じ物と重なる図面の番号）
 function blueprintRules(game, id, bp, world, same = new Set()) {
   const def = districtDef(game, id);
-  const allowed = new Set(unlocked(game));
+  const allowed = new Set(placeableIn(game, id));
   const locked = [...new Set(bp.ents.filter((e) => !allowed.has(e.id)).map((e) => e.id))];
   if (locked.length) return `まだ使えない設備がある（${locked.map((b) => game.content.buildings[b].name).join('・')}）`;
   for (const [b, max] of Object.entries(def.limits || {})) {
@@ -187,6 +187,13 @@ export function unlocked(game) {
   return list;
 }
 
+// その区画で置ける物（倉庫の出す口は、口を自由に置ける区画だけ）
+export function placeableIn(game, id) {
+  const def = districtDef(game, id);
+  const B = game.content.buildings;
+  return unlocked(game).filter((b) => B[b].kind !== 'sink' && (B[b].kind !== 'source' || (B[b].free && def?.freePorts)));
+}
+
 // 機械で選べるレシピ：区画を開くと増えるレシピ（gatedRecipes）は、その区画が開いているときだけ
 export function recipesFor(game, buildingId) {
   const { buildings, districts, gatedRecipes = [] } = game.content;
@@ -202,7 +209,8 @@ export function goals(game) {
       if (!r.goal) return;
       const w = game.worlds[d.id];
       const reached = (game.state.done[d.id] || 0) > i;
-      const flowing = !!w && Object.entries(r.targets).every(([t, n]) => rate(w, t) >= n);
+      // 流れ続けているか：毎分の数え方の区切りで1個ずれることがあるので、5%まで（30なら29）は流れていると見る
+      const flowing = !!w && Object.entries(r.targets).every(([t, n]) => rate(w, t) >= n - Math.floor(n / 20));
       list.push({ ...r.goal, district: d.id, targets: r.targets, reached, flowing, open: game.state.open.includes(d.id) });
     });
   }
@@ -288,10 +296,12 @@ export function step(game) {
   for (const id of game.state.open) {
     const w = game.worlds[id];
     stepWorld(w);
+    const isolated = districtDef(game, id)?.isolated; // 1枚の工房：倉庫には渡さない
     for (const t in w.tickOut) {
       const n = w.tickOut[t];
-      add(game.cur.in, t, n);
       add(game.state.made, t, n);
+      if (isolated) continue;
+      add(game.cur.in, t, n);
       distribute(game, t, n, id);
     }
   }
