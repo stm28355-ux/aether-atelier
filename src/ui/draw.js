@@ -7,9 +7,9 @@ const C = CELL;
 const LAMP = { working: '#3f8a4d', waiting: '#d9a514', blocked: '#c0392b', 'no-field': '#c0392b', 'no-recipe': '#999', 'no-mana': '#c0392b', 'no-fuel': '#c0392b', shaken: '#c0392b' };
 const LABEL = { waiting: '材料待ち', blocked: '出口づまり', 'no-field': '範囲の外', 'no-mana': '魔力の範囲外', 'no-fuel': '魔力炉が空', shaken: '揺れで止まる' };
 
-function lamp(ctx, x, y, color) {
+function lamp(ctx, x, y, color, small = false) {
   ctx.fillStyle = color;
-  ctx.beginPath(); ctx.arc(x + 11, y + 11, 5, 0, 7); ctx.fill();
+  ctx.beginPath(); ctx.arc(x + (small ? 8 : 11), y + (small ? 8 : 11), small ? 4 : 5, 0, 7); ctx.fill();
   ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.stroke();
 }
 
@@ -56,13 +56,15 @@ function arrow(ctx, cx, cy, dir, size, color) {
   ctx.restore();
 }
 
-function frontEdge(ctx, e, color) {
+// noArrow：1×1 の機械は狭いので、前の辺の線だけ
+function frontEdge(ctx, e, color, noArrow = false) {
   const x = e.x * C, y = e.y * C, w = e.w * C, h = e.h * C;
   ctx.fillStyle = color;
   if (e.dir === 0) ctx.fillRect(x + w - 6, y + 6, 4, h - 12);
   else if (e.dir === 1) ctx.fillRect(x + 6, y + h - 6, w - 12, 4);
   else if (e.dir === 2) ctx.fillRect(x + 2, y + 6, 4, h - 12);
   else ctx.fillRect(x + 6, y + 2, w - 12, 4);
+  if (noArrow) return;
   const cx = x + w / 2 + DX[e.dir] * (w / 2 - 14), cy = y + h / 2 + DY[e.dir] * (h / 2 - 14);
   arrow(ctx, cx, cy, e.dir, 9, color);
 }
@@ -124,7 +126,10 @@ function drawEnt(ctx, world, e, opts) {
     ctx.font = `600 ${e.w === 1 ? 10 : 13}px system-ui, sans-serif`;
     // 下に札（状態）を書く物は、名前を少し上へ
     const sub = e.w > 1 && (e.kind === 'machine' || (e.kind === 'emitter' && !world.leyline && (e.fuelIn || e.needsMana)));
-    ctx.fillText(data.buildings[e.id].name, cx, cy - (sub ? 8 : 0));
+    // 1×1 の機械：上に状態の丸とできる物の絵、その下に名前、いちばん下に相乗
+    const tiny = e.kind === 'machine' && e.w === 1;
+    if (tiny) ctx.font = '600 9px system-ui, sans-serif';
+    ctx.fillText(data.buildings[e.id].name, cx, tiny ? y + 22 : cy - (sub ? 8 : 0));
     if (e.kind === 'emitter' && (e.fuelIn || e.needsMana) && !world.leyline) {
       // 魔力炉は燃えているか、竜炉などは魔力が届いているか
       const on = e.fuelIn ? e.burning : e.on;
@@ -138,24 +143,32 @@ function drawEnt(ctx, world, e, opts) {
       } else if (!on) ctx.fillText(e.covered ? LABEL['no-fuel'] : LABEL['no-mana'], cx, cy + 9);
     }
     if (e.kind === 'machine') {
-      frontEdge(ctx, e, '#fff3d6');
+      frontEdge(ctx, e, '#fff3d6', e.w === 1);
       const slow = e.slow && e.status === 'working';
-      lamp(ctx, x, y, slow ? LAMP.waiting : LAMP[e.status]);
+      lamp(ctx, x, y, slow ? LAMP.waiting : LAMP[e.status], e.w === 1);
       const label = slow ? '魔力不足' : LABEL[e.status];
       if (label && e.w > 1) {
         ctx.fillStyle = '#fff';
         ctx.font = '11px system-ui, sans-serif';
         ctx.fillText(label, cx, cy + 9);
       }
+      const r = data.recipes[e.recipe];
+      const small = e.w === 1;
+      // 右上に、できる物の絵（何を作る機械か、ひと目で分かるように）
+      if (r) {
+        const out = Object.keys(r.out)[0];
+        const ox = x + w - (small ? 10 : 14), oy = y + (small ? 10 : 14);
+        ctx.fillStyle = 'rgba(255,255,255,0.85)';
+        ctx.beginPath(); ctx.arc(ox, oy, small ? 8 : 11, 0, 7); ctx.fill();
+        drawItem(ctx, out, ox, oy, 16);
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      }
       if (e.syn) { // 相乗：隣の同じ機械の数だけ速い
         ctx.fillStyle = '#ffd166';
         ctx.font = '600 8px system-ui, sans-serif';
-        ctx.textAlign = 'right';
-        ctx.fillText(`+${e.syn * 25}%`, x + w - 4, y + 9);
-        ctx.textAlign = 'center';
+        ctx.fillText(`+${e.syn * 25}%`, cx, small ? y + 31 : y + h - 20);
       }
-      const r = data.recipes[e.recipe];
-      if (r && e.left > 0) {
+      if (r && e.left > 0 && !small) { // 進み具合（1×1 は狭いので出さない。状態の丸で分かる）
         ctx.fillStyle = 'rgba(0,0,0,0.25)';
         ctx.fillRect(x + 10, y + h - 13, w - 20, 4);
         ctx.fillStyle = '#fff3d6';
