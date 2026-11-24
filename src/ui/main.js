@@ -145,11 +145,17 @@ $('town').addEventListener('click', (ev) => {
 });
 function renderGoals() {
   $('goals').innerHTML = goals(game).map((g) => {
+    const name = districtDef(game, g.district).name;
     const want = Object.entries(g.targets).map(([t, n]) => `${dot(t)}${itemName(t)} 毎分${n}`).join('、');
+    // その区画の納める口に入っている量（大目標はこれだけで判定する。ほかの区画で納めた分や、倉庫の合計は数えない）
+    const w = game.worlds[g.district];
+    const now = Object.entries(g.targets).map(([t, n]) => {
+      const r = w ? rate(w, t) : 0;
+      return `${dot(t)}${itemName(t)} 毎分<b class="${r >= n - Math.floor(n / 20) ? 'ok' : 'warn'}">${r}</b>／${n}`;
+    }).join('、');
     const st = !g.open ? '<span class="sub">まだ区画が開いていない</span>'
-      : !g.reached ? `<span class="sub">${districtDef(game, g.district).name}で、${want}を納める</span>`
-        : g.flowing ? `<span class="ok">◎ 流れ続けている</span>（${want}）`
-          : `<span class="warn">止まっている</span>（${want}が足りない）`;
+      : !g.reached ? `<span class="sub">${name}で、${want}を納める</span>`
+        : `${g.flowing ? '<span class="ok">◎ 流れ続けている</span>' : '<span class="warn">止まっている</span>'}<div class="sub">${name}が納めている：${now}</div>`;
     return `<div class="goal ${g.reached ? 'reached' : ''}"><b>${g.title}</b><div>${st}</div></div>`;
   }).join('');
 }

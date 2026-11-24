@@ -97,7 +97,8 @@ table.rules td { border-top: 1px solid var(--line); padding: 3px 10px 3px 0; }
 /* フェーズ5：大目標・選ぶ窓 */
 #goals .goal { background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; margin-bottom: 6px; font-size: 13px; }
 #goals .goal.reached { border-color: var(--ok); }
-#goals .goal b { display: block; }
+#goals .goal > b { display: block; }
+#goals .goal .sub b { font-weight: 700; }
 .ok { color: var(--ok); font-weight: 600; }
 .warn { color: #c0392b; font-weight: 600; }
 .later { grid-column: 1 / -1; text-align: center; }
